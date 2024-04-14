@@ -1,0 +1,53 @@
+name: Publish Docker Image to Registry
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  build-and-publish:
+    name: Build and Publish Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+          use: true
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Image
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: heyvaldemar/aws-kubectl:latest, heyvaldemar/aws-kubectl:${{ github.sha }}
+          cache-from: type=registry,ref=heyvaldemar/aws-kubectl:cache
+          cache-to: type=inline
+          platforms: linux/amd64,linux/arm64
+          file: Dockerfile
+
+      - name: Scan Image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'heyvaldemar/aws-kubectl:latest'
+          format: 'table'
+          severity: 'CRITICAL'
+
+      - name: Upload Trivy Scan Results
+        if: failure() # This step runs only if the Trivy scan fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-scan-results
+          path: trivy-report.txt
