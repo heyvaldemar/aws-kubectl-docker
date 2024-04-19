@@ -2,6 +2,8 @@
 
 This Docker image is designed to streamline operations on Amazon Web Services (AWS) and Kubernetes by bundling AWS CLI version 2 (`aws`) and the Kubernetes Command-Line Tool (`kubectl`). Based on Ubuntu 22.04, it includes all necessary dependencies such as `jq` for optimal functionality. This image is ideal for CI/CD pipelines, automation tasks, and environments that require seamless management of AWS resources and Kubernetes clusters.
 
+🐳 You can find the Docker image on [Docker Hub](https://hub.docker.com/r/heyvaldemar/aws-kubectl).
+
 # Features
 
 - **Ubuntu 22.04**: Provides a stable and secure base for consistent performance.
