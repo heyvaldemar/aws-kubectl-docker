@@ -6,7 +6,7 @@ This Docker image is designed to streamline operations on Amazon Web Services (A
 
 ## Features
 
-- **Ubuntu 22.04**: Provides a stable and secure base for consistent performance.
+- **Ubuntu 24.04**: Provides a stable and secure base for consistent performance.
 - **AWS CLI v2**: Equipped with the latest capabilities for comprehensive AWS management.
 - **kubectl**: Enables robust management of Kubernetes clusters, ensuring compatibility with the latest releases.
 - **jq**: A lightweight and flexible command-line JSON processor, enhancing scripting capabilities.
