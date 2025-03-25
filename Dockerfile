@@ -1,6 +1,8 @@
 # Use Ubuntu 24.04 as the base image
 FROM ubuntu:24.04
 
+ARG TARGETARCH
+
 # Set environment variables to non-interactive (this prevents some prompts)
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -16,7 +18,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Download AWS CLI v2
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+RUN case ${TARGETARCH} in \
+     "amd64") ARCH=x86_64 ;; \
+     "arm64") ARCH=aarch64 ;; \
+   esac \
+   && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${ARCH}.zip" -o "awscliv2.zip"
 
 # Unzip AWS CLI v2
 RUN unzip awscliv2.zip
@@ -31,7 +37,7 @@ RUN rm -f awscliv2.zip
 RUN if [ "${KUBE_VERSION}" = "latest" ]; then \
         KUBE_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt); \
     fi && \
-    curl -LO "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/amd64/kubectl" \
+    curl -LO "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/${TARGETARCH}/kubectl" \
     && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
 # Cleanup and final touches
