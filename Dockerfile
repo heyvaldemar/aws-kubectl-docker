@@ -21,8 +21,8 @@ RUN case "${TARGETARCH}" in \
     esac && \
     curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${ARCH}.zip" -o "awscliv2.zip"
 
-# Unzip AWS CLI v2
-RUN unzip awscliv2.zip
+# Unzip and install AWS CLI v2
+RUN unzip awscliv2.zip && ./aws/install && rm -rf awscliv2.zip aws/
 
 # Install kubectl for the correct architecture
 ARG KUBE_VERSION=latest
