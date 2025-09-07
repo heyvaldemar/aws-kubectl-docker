@@ -1,43 +1,46 @@
 # Use Ubuntu 24.04 as the base image
 FROM ubuntu:24.04
 
-# Set build-time architecture variable
+# Build-time settings
 ARG TARGETARCH
-# Define the Kubernetes version as a build argument with a default value
 ARG KUBE_VERSION=latest
+ARG DEBIAN_FRONTEND=noninteractive
 
-# Set environment variables to non-interactive (this prevents some prompts)
-ENV DEBIAN_FRONTEND=noninteractive
+# (Optional) helpful shell defaults
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    unzip \
-    jq \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Install minimal dependencies in a single layer
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      unzip \
+      jq \
+      gettext-base \
+ && rm -rf /var/lib/apt/lists/*
 
-# Download and install AWS CLI v2 for the correct architecture
-RUN case "${TARGETARCH}" in \
-        "amd64") ARCH="x86_64" ;; \
-        "arm64") ARCH="aarch64" ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${ARCH}.zip" -o "awscliv2.zip" && \
-    unzip awscliv2.zip && \
-    ./aws/install && \
-    rm -rf awscliv2.zip aws/
+# Resolve architecture (fallback if TARGETARCH not provided)
+# KARCH is for kubectl (amd64|arm64); AWS_ARCH is for AWS CLI (x86_64|aarch64)
+RUN KARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
+ && case "$KARCH" in \
+      amd64) AWS_ARCH="x86_64" ;; \
+      arm64) AWS_ARCH="aarch64" ;; \
+      *) echo "Unsupported architecture: $KARCH" >&2; exit 1 ;; \
+    esac \
+ # ----- AWS CLI v2 -----
+ && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o awscliv2.zip \
+ && unzip -q awscliv2.zip \
+ && ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli \
+ && rm -rf awscliv2.zip aws \
+ # ----- kubectl (versioned + checksum verification) -----
+ && if [[ "${KUBE_VERSION}" == "latest" ]]; then \
+        KUBE_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"; \
+    fi \
+ && curl -fsSLo kubectl "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/${KARCH}/kubectl" \
+ && curl -fsSLo kubectl.sha256 "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/${KARCH}/kubectl.sha256" \
+ && echo "$(cat kubectl.sha256)  kubectl" | sha256sum -c - \
+ && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
+ && rm -f kubectl kubectl.sha256
 
-# Install kubectl using the specified version or fetch the latest
-RUN if [ "${KUBE_VERSION}" = "latest" ]; then \
-        KUBE_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt); \
-    fi && \
-    curl -LO "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/${TARGETARCH}/kubectl" && \
-    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
-    rm -f kubectl
-
-# Final cleanup
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
-
-# Set default command
+# Default command
 CMD ["bash"]
