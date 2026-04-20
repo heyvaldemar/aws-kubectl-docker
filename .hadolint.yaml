@@ -1,0 +1,14 @@
+# hadolint configuration for aws-kubectl-docker
+# https://github.com/hadolint/hadolint
+
+ignored:
+  # DL3008: Pin versions in apt-get install.
+  # We deliberately track Ubuntu 24.04 security updates via weekly rebuilds
+  # instead of pinning package versions, which would require frequent manual
+  # bumps and would not actually improve supply-chain integrity here.
+  - DL3008
+
+failure-threshold: warning
+
+trustedRegistries:
+  - docker.io
