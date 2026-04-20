@@ -1,5 +1,10 @@
 # aws-kubectl Docker Image
 
+[![Docker Pulls](https://img.shields.io/docker/pulls/heyvaldemar/aws-kubectl.svg)](https://hub.docker.com/r/heyvaldemar/aws-kubectl)
+[![Docker Image Size](https://img.shields.io/docker/image-size/heyvaldemar/aws-kubectl/latest.svg)](https://hub.docker.com/r/heyvaldemar/aws-kubectl/tags)
+[![Build Status](https://github.com/heyvaldemar/aws-kubectl-docker/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/aws-kubectl-docker/actions/workflows/publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bundling **AWS CLI v2** (`aws`) and **kubectl** on **Ubuntu 24.04**. It also includes `jq`, `curl`, `unzip`, and `envsubst` (from `gettext-base`). Perfect for CI/CD steps, automation, and reproducible local scripting.
 
 🐳 Docker Hub: [heyvaldemar/aws-kubectl](https://hub.docker.com/r/heyvaldemar/aws-kubectl)
@@ -10,10 +15,24 @@ This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bun
 - **AWS CLI v2** for full AWS management.
 - **kubectl** (pin a specific version or use the latest stable at build time).
 - `jq`, `curl`, `unzip`, `envsubst`, and `ca-certificates` preinstalled.
+- **Multi-stage build**: build-only intermediates (AWS CLI zip, extracted tree, kubectl archive) never enter the final image.
 - **Checksum verification** for `kubectl` during build.
 - **Multi-arch ready** (amd64/arm64) when built/pushed with `buildx`.
+- **OCI labels** (`org.opencontainers.image.*`) on every published image.
+- **Resolved kubectl version** written to `/etc/kube-version` inside the image.
 
-> Default user is **root**. See **Run as non-root (optional)** for a hardened runtime.
+> Default user is **root**, matching the long-standing `heyvaldemar/aws-kubectl:latest` contract. See **Run as non-root (optional)** for a hardened runtime.
+
+## Supply chain
+
+- Multi-stage `Dockerfile` keeps build-only intermediate artefacts (the downloaded AWS CLI archive, extracted tree, kubectl tarball, and checksum file) out of the published image.
+- `kubectl` binaries are verified against the upstream `sha256` checksum published at `dl.k8s.io` during build.
+- Weekly scheduled rebuilds pick up Ubuntu base-image security updates (`cron: "0 6 * * 1"`).
+- CI lints the Dockerfile with `hadolint` and shell scripts with `shellcheck` before any build runs.
+- All third-party GitHub Actions are pinned to a commit SHA with a version comment.
+- Build arguments `VCS_REF` and `BUILD_DATE` are stamped into `org.opencontainers.image.revision` and `org.opencontainers.image.created`, and the resolved kubectl release is exposed via `io.heyvaldemar.kubectl.version` and `/etc/kube-version`.
+
+> Cosign-signed images, SBOM attestations, and SLSA provenance are planned for **Phase 2** of the supply-chain roadmap. Non-root runtime is planned for **Phase 3**.
 
 ## Use Cases
 
@@ -59,6 +78,15 @@ docker run --rm -v ~/.kube:/root/.kube \
 
 ## Build Instructions
 
+The `Dockerfile` accepts the following build arguments:
+
+| ARG          | Default    | Purpose                                                                  |
+|--------------|------------|--------------------------------------------------------------------------|
+| `KUBE_VERSION` | `latest` | Pin a specific `kubectl` release (e.g. `v1.30.6`). `latest` fetches the current stable from `dl.k8s.io`. |
+| `VCS_REF`      | `unknown`| Commit SHA, stamped into `org.opencontainers.image.revision`.             |
+| `BUILD_DATE`   | `unknown`| ISO-8601 build timestamp, stamped into `org.opencontainers.image.created`.|
+| `TARGETARCH`   | auto     | Target architecture (`amd64`/`arm64`). Supplied automatically by `buildx`.|
+
 ### Local single-arch (dev)
 
 ```bash
@@ -75,6 +103,16 @@ docker build --build-arg KUBE_VERSION=v1.30.6 \
 
 If `KUBE_VERSION` is omitted, the build fetches the **latest stable** from `dl.k8s.io`.
 
+### Stamp revision and build date (recommended for release builds)
+
+```bash
+docker build \
+  --build-arg KUBE_VERSION=v1.30.6 \
+  --build-arg VCS_REF="$(git rev-parse HEAD)" \
+  --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+  -t aws-kubectl:local .
+```
+
 ### Multi-arch build & push (amd64 + arm64)
 
 ```bash
@@ -83,6 +121,8 @@ docker buildx create --name x --use || docker buildx use x
 # Generic tag (no OS name in the tag)
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
+  --build-arg VCS_REF="$(git rev-parse HEAD)" \
+  --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   -t heyvaldemar/aws-kubectl:latest \
   --push .
 
@@ -91,6 +131,8 @@ KUBE_VERSION=v1.30.6
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --build-arg KUBE_VERSION=$KUBE_VERSION \
+  --build-arg VCS_REF="$(git rev-parse HEAD)" \
+  --build-arg BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
   -t heyvaldemar/aws-kubectl:kube-$KUBE_VERSION \
   --push .
 ```
@@ -126,6 +168,7 @@ The script checks:
 
 - OS/arch
 - Versions: AWS CLI, kubectl (client), jq, envsubst, curl, unzip
+- That `/etc/kube-version` matches `kubectl version --client`
 - Binary locations & CA bundle
 - HTTPS reachability (header-only)
 - (Optional) AWS STS + `kubectl` cluster calls if you mount `~/.aws` / `~/.kube`
@@ -142,16 +185,19 @@ docker run --rm $IMG sh -lc 'uname -a; echo -n "Arch: "; uname -m'
 docker run --rm $IMG aws --version
 docker run --rm $IMG kubectl version --client --output=yaml
 docker run --rm $IMG jq --version
-docker run --rm $IMG envsubst --version || true
-docker run --rm $IMG sh -lc 'curl --version | head -n1'
-docker run --rm $IMG sh -lc 'unzip -v | head -n2'
+docker run --rm $IMG envsubst --version
+docker run --rm $IMG sh -c 'curl --version | head -n1'
+docker run --rm $IMG sh -c 'unzip -v | head -n2'
+
+# Resolved kubectl release stamped at build time
+docker run --rm $IMG cat /etc/kube-version
 
 # Binaries present where expected
-docker run --rm $IMG sh -lc 'ls -l /usr/local/bin/kubectl; which aws jq envsubst curl unzip'
+docker run --rm $IMG sh -c 'ls -l /usr/local/bin/kubectl; for b in aws jq envsubst curl unzip; do command -v "$b"; done'
 
 # CA bundle present + HTTPS sanity
-docker run --rm $IMG sh -lc 'ls -lh /etc/ssl/certs/ca-certificates.crt || true'
-docker run --rm $IMG sh -lc 'curl -fsSI -o /dev/null -w "HTTPS OK (%{http_code})\n" https://kubernetes.io'
+docker run --rm $IMG sh -c 'ls -lh /etc/ssl/certs/ca-certificates.crt'
+docker run --rm $IMG sh -c 'curl -fsSI -o /dev/null -w "HTTPS OK (%{http_code})\n" https://kubernetes.io'
 ```
 
 ### Optional “real” checks (with mounted config)
