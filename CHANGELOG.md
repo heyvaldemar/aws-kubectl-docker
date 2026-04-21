@@ -30,6 +30,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pull-request dry-run builds (`push=false`), and a Docker Hub description sync step on
   pushes to `main`.
 - All third-party GitHub Actions pinned to a commit SHA with a `# vX` version comment.
+- Cosign keyless image signatures (Sigstore OIDC) on every published digest.
+- SBOM attached to every published image (SPDX format via BuildKit).
+- SLSA build provenance attestation (`provenance: mode=max`) on every published image.
+- GitHub native build provenance attestation via `actions/attest-build-provenance`.
+- Trivy vulnerability scan on every published image, uploading SARIF to the GitHub
+  Security tab (CRITICAL and HIGH severities, fixable CVEs only).
+- `SECURITY.md` — vulnerability disclosure policy and supply-chain verification
+  instructions.
+- `LICENSE` — canonical MIT license text at repo root.
+- `.dockerignore` — excludes repo metadata from the build context.
+- README "Upgrade Notes" section — flags the `v2.0` non-root breaking change on the
+  horizon.
+- README "Verifying signatures" subsection — `cosign verify` invocation for the
+  published image.
 
 ### Changed
 - `scripts/smoke-test.sh` now fails hard on missing tools (no `|| true` fallbacks for core
@@ -51,6 +65,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in the runtime toolchain. Retained **for backwards compatibility** with users of
   `heyvaldemar/aws-kubectl:latest` who rely on `unzip` for ad-hoc zip extraction in CI
   pipelines; removal is deferred to a future major release after a deprecation notice.
+- Dockerfile base image pinned by digest (`ubuntu:24.04@sha256:…`) for reproducible,
+  auditable builds. Dependabot's `docker` ecosystem tracks upstream digest bumps weekly.
+- CI permissions narrowed from workflow-scope to per-job least-privilege. `lint`:
+  `contents: read`; `build`: `contents: read`, `packages: write`, `id-token: write`,
+  `attestations: write`, `security-events: write`; `scan-trivy`: `contents: read`,
+  `security-events: write`; `dockerhub-description`: default (empty) permissions.
+- CI jobs and the long-running build step gained explicit `timeout-minutes` ceilings
+  (`lint: 5`, `build: 30`, `Build and push` step: `20`, `scan-trivy: 10`,
+  `dockerhub-description: 5`) replacing the GitHub default of 360 minutes.
+- Dependabot groups minor/patch `github-actions` and `docker` ecosystem bumps into a
+  single PR each week; major bumps continue to open individual PRs.
+- Docs: unified About footer with canonical block (reusable across heyvaldemar public
+  repos); Docker Hub short-description trimmed from 109 bytes to 82 bytes so it stops
+  being silently truncated by Docker Hub.
+
+### Removed
+- `.github/FUNDING.yml` — sponsor discovery moves to heyvaldemar.com.
+- Legacy README sections: first-person bio, paid-membership tier references, affiliate
+  links (VPN/password-manager partner links, Udemy), `kit.co` gear shortcuts,
+  cryptocurrency wallet addresses, Discord invite, octocat gif, and footer SVG.
 
 ### Security
 - `kubectl` binaries continue to be verified against the upstream SHA-256 checksum

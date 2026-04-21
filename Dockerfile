@@ -5,7 +5,8 @@
 #   Downloads, verifies, and unpacks AWS CLI v2 and kubectl.
 #   Build-only tooling (unzip) lives here and never enters the final image.
 # ──────────────────────────────────────────────────────────────────────────────
-FROM ubuntu:24.04 AS builder
+# Digest pinned; Dependabot docker ecosystem will bump this weekly.
+FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS builder
 
 ARG TARGETARCH
 ARG KUBE_VERSION=latest
@@ -56,7 +57,7 @@ RUN KARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
 #   ad-hoc zip extraction in CI/CD pipelines. Default user remains root for
 #   the same reason; non-root runtime arrives in v3.
 # ──────────────────────────────────────────────────────────────────────────────
-FROM ubuntu:24.04 AS final
+FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS final
 
 ARG KUBE_VERSION=latest
 ARG VCS_REF=unknown
