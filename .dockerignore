@@ -1,0 +1,9 @@
+.git
+.github
+.claude
+.hadolint.yaml
+*.md
+scripts/
+CHANGELOG.md
+LICENSE
+SECURITY.md
