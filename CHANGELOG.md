@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sha-*` tags for the last 90 days of builds. Cosign `.sig` tags were
   preserved.
 
+### Fixed
+- OpenSSF Scorecard publication to `api.scorecard.dev` — corrected the
+  `ossf/scorecard-action` pin from the annotated tag object SHA (`99c09fe`)
+  to the actual commit SHA (`4eaacf0`). The previous pin used the tag object
+  SHA returned by GitHub's `git/refs/tags/...` API; Scorecard's
+  imposter-commit verification rejected it and refused to publish results,
+  blocking README badge activation. `v2.4.3` itself is unchanged.
+
 ## [2.0.0] - 2026-04-21
 
 ### BREAKING CHANGES
