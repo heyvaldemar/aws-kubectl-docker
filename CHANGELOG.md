@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: unified About footer with canonical block (reusable across heyvaldemar public
   repos); Docker Hub short-description trimmed from 109 bytes to 82 bytes so it stops
   being silently truncated by Docker Hub.
+- CI: `actions/attest-build-provenance` no longer pushes attestations as OCI referrers
+  to Docker Hub (unreliable credential handoff); attestations remain available via
+  GitHub Attestations storage at
+  `https://github.com/heyvaldemar/aws-kubectl-docker/attestations`.
 
 ### Removed
 - `.github/FUNDING.yml` — sponsor discovery moves to heyvaldemar.com.
