@@ -4,6 +4,7 @@
 [![Docker Image Size](https://img.shields.io/docker/image-size/heyvaldemar/aws-kubectl/latest.svg)](https://hub.docker.com/r/heyvaldemar/aws-kubectl/tags)
 [![Build Status](https://github.com/heyvaldemar/aws-kubectl-docker/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/aws-kubectl-docker/actions/workflows/publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/heyvaldemar/aws-kubectl-docker/badge)](https://scorecard.dev/viewer/?uri=github.com/heyvaldemar/aws-kubectl-docker)
 
 This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bundling **AWS CLI v2** (`aws`) and **kubectl** on **Ubuntu 24.04**. It also includes `jq`, `curl`, `unzip`, and `envsubst` (from `gettext-base`). Perfect for CI/CD steps, automation, and reproducible local scripting.
 

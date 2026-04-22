@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- OpenSSF Scorecard analysis workflow (`.github/workflows/scorecard.yml`).
+  Runs weekly on Tuesdays at 06:00 UTC (after the Monday rebuild and cleanup
+  workflows), on every push to `main`, and on branch-protection-rule changes.
+  Publishes results to the public OpenSSF API (scorecard.dev viewer) and
+  uploads SARIF to the GitHub Security tab. README badge added next to the
+  license badge; the badge populates automatically after the first run
+  completes on `main`.
 - Weekly `Docker Hub Tag Cleanup` GitHub Actions workflow
   (`.github/workflows/dockerhub-tag-cleanup.yml`). Deletes `sha-*` image tags
   older than 90 days on Mondays at 07:00 UTC (one hour after the publish
