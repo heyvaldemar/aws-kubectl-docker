@@ -54,8 +54,9 @@ RUN KARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
 #   Runtime toolchain: aws, kubectl, jq, envsubst, curl, unzip, ca-certificates.
 #   `unzip` is retained in the final image for backwards compatibility with
 #   users of heyvaldemar/aws-kubectl:latest (500K+ pulls) who rely on it for
-#   ad-hoc zip extraction in CI/CD pipelines. Default user remains root for
-#   the same reason; non-root runtime arrives in v3.
+#   ad-hoc zip extraction in CI/CD pipelines.
+#   As of v2.0 the image runs as non-root (UID 10001, GID 0). Users who need
+#   root can override with `--user 0:0`. See README "Breaking Changes in v2.0".
 # ──────────────────────────────────────────────────────────────────────────────
 FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b AS final
 
@@ -99,5 +100,26 @@ LABEL org.opencontainers.image.title="aws-kubectl" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       io.heyvaldemar.kubectl.version="${KUBE_VERSION}"
+
+# Create non-root user with UID 10001 and primary GID 0 (root group).
+# GID 0 is OpenShift SCC compatible: OpenShift assigns random UIDs at runtime
+# but always uses GID 0 for file ownership. Files owned by root group remain
+# readable/writable. Also works on vanilla Kubernetes, Docker Desktop, and CI.
+# UID 10001 is outside the standard user range (1000-9999) to avoid host UID
+# collisions on developer machines running Ubuntu.
+RUN useradd --system --uid 10001 --gid 0 \
+      --home-dir /home/app --shell /sbin/nologin \
+      --comment "aws-kubectl runtime user" app \
+ && mkdir -p /home/app \
+ && chown -R 10001:0 /home/app \
+ && chmod -R g=u /home/app
+
+# HOME must be set explicitly for kubectl/aws CLI cache paths to work
+# (~/.kube/cache, ~/.aws/cli/cache, ~/.aws/sso/cache).
+ENV HOME=/home/app
+
+WORKDIR /home/app
+
+USER 10001:0
 
 CMD ["bash"]

@@ -9,6 +9,52 @@ This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bun
 
 🐳 Docker Hub: [heyvaldemar/aws-kubectl](https://hub.docker.com/r/heyvaldemar/aws-kubectl)
 
+## Breaking Changes in v2.0
+
+Starting with **v2.0.0**, this image runs as a **non-root user (UID 10001, GID 0)**
+by default. This aligns with modern container security best practices and is
+required for compatibility with OpenShift, restricted Kubernetes PodSecurityPolicy
+profiles, and enterprise security scanners.
+
+### For most users: no changes needed
+
+If you use this image for one-off CI commands (`aws s3 sync`, `kubectl apply`),
+v2.0 works identically to v1.x.
+
+### For users mounting volumes
+
+If you mount a host directory or Kubernetes PVC, you may need to adjust file
+ownership or run the container with a matching UID:
+
+**Docker:**
+
+```bash
+docker run --rm -v "$PWD:/home/app" --user "$(id -u):0" \
+  heyvaldemar/aws-kubectl:latest aws s3 ls
+```
+
+**Kubernetes:**
+
+```yaml
+spec:
+  securityContext:
+    runAsUser: 10001
+    runAsGroup: 0
+    fsGroup: 0
+```
+
+### Staying on v1.x
+
+If v2.0 breaks your workflow and you need time to migrate, pin to the v1
+maintenance track:
+
+```bash
+docker pull heyvaldemar/aws-kubectl:v1-maintenance
+```
+
+The `v1-maintenance` tag will receive security updates through **July 20, 2026**,
+after which it will be frozen.
+
 ## Features
 
 - **Ubuntu 24.04** base for stability.
@@ -21,7 +67,7 @@ This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bun
 - **OCI labels** (`org.opencontainers.image.*`) on every published image.
 - **Resolved kubectl version** written to `/etc/kube-version` inside the image.
 
-> Default user is **root**, matching the long-standing `heyvaldemar/aws-kubectl:latest` contract. See **Run as non-root (optional)** for a hardened runtime.
+> Default user is **non-root (UID 10001, GID 0)** as of v2.0. If you need root — e.g. to install additional `apt` packages at runtime — override with `--user 0:0`. See [Breaking Changes in v2.0](#breaking-changes-in-v20) for migration details.
 
 ## Supply chain
 
@@ -45,7 +91,7 @@ cosign verify heyvaldemar/aws-kubectl:latest \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 ```
 
-> Non-root runtime is planned for **Phase 3** (release `v2.0`). See [Upgrade Notes](#upgrade-notes).
+> Non-root runtime shipped in **v2.0**. See [Breaking Changes in v2.0](#breaking-changes-in-v20) for migration details and the 90-day `v1-maintenance` track.
 
 ## Use Cases
 
@@ -55,16 +101,20 @@ cosign verify heyvaldemar/aws-kubectl:latest \
 
 ## Prerequisites
 
-- `~/.aws` – AWS credentials/config (`credentials`, `config`)
-- `~/.kube` – kubeconfig(s)
+- `~/.aws` – AWS credentials/config (`credentials`, `config`). Mount to `/home/app/.aws` inside the container.
+- `~/.kube` – kubeconfig(s). Mount to `/home/app/.kube` inside the container.
+
+> The container's default user is UID 10001 with `HOME=/home/app`. Pass `--user "$(id -u):0"` when mounting host files so the container can read them.
 
 ## Running the Container
 
-Interactive shell with both configs:
+Interactive shell with both configs (mount under `/home/app` — the non-root user's `HOME` — and match your host UID so the container can read the mounted files):
+
 ```bash
 docker run -it \
-  -v ~/.aws:/root/.aws \
-  -v ~/.kube:/root/.kube \
+  --user "$(id -u):0" \
+  -v ~/.aws:/home/app/.aws \
+  -v ~/.kube:/home/app/.kube \
   heyvaldemar/aws-kubectl bash
 ```
 
@@ -72,8 +122,9 @@ If you pulled an **amd64-only** tag on an ARM/M-series Mac:
 
 ```bash
 docker run --platform linux/amd64 -it \
-  -v ~/.aws:/root/.aws \
-  -v ~/.kube:/root/.kube \
+  --user "$(id -u):0" \
+  -v ~/.aws:/home/app/.aws \
+  -v ~/.kube:/home/app/.kube \
   heyvaldemar/aws-kubectl bash
 ```
 
@@ -81,11 +132,15 @@ docker run --platform linux/amd64 -it \
 
 ```bash
 # List S3 buckets
-docker run --rm -v ~/.aws:/root/.aws \
+docker run --rm \
+  --user "$(id -u):0" \
+  -v ~/.aws:/home/app/.aws \
   heyvaldemar/aws-kubectl aws s3 ls
 
 # Get Kubernetes nodes
-docker run --rm -v ~/.kube:/root/.kube \
+docker run --rm \
+  --user "$(id -u):0" \
+  -v ~/.kube:/home/app/.kube \
   heyvaldemar/aws-kubectl kubectl get nodes
 ```
 
@@ -217,11 +272,18 @@ docker run --rm $IMG sh -c 'curl -fsSI -o /dev/null -w "HTTPS OK (%{http_code})\
 
 ```bash
 # AWS identity (requires valid creds)
-docker run --rm -v ~/.aws:/root/.aws aws-kubectl:local aws sts get-caller-identity
+docker run --rm --user "$(id -u):0" \
+  -v ~/.aws:/home/app/.aws \
+  aws-kubectl:local aws sts get-caller-identity
 
 # Current k8s context & nodes (requires valid kubeconfig)
-docker run --rm -v ~/.kube:/root/.kube aws-kubectl:local kubectl config current-context
-docker run --rm -v ~/.kube:/root/.kube aws-kubectl:local kubectl get nodes -o wide
+docker run --rm --user "$(id -u):0" \
+  -v ~/.kube:/home/app/.kube \
+  aws-kubectl:local kubectl config current-context
+
+docker run --rm --user "$(id -u):0" \
+  -v ~/.kube:/home/app/.kube \
+  aws-kubectl:local kubectl get nodes -o wide
 ```
 
 ## Tagging / Versioning Policy
@@ -239,26 +301,18 @@ To avoid OS-specific tags in docs and keep usage predictable:
 
 ## Security Notes
 
+- Runs as **non-root** by default (UID 10001, GID 0) as of v2.0.
 - `kubectl` binaries are **checksum-verified** during build.
 - APT is minimal (`--no-install-recommends`) and lists are cleaned.
-- Consider running as **non-root** and pinning `KUBE_VERSION` in CI for reproducibility.
+- Pin `KUBE_VERSION` in CI for reproducibility.
 
-## Run as non-root (optional)
+## Run as root (override)
+
+If a specific workflow requires root inside the container (e.g. installing additional `apt` packages at runtime, or restoring pre-v2.0 behaviour), override the user:
 
 ```bash
-# Map host user, set HOME, and mount configs under that HOME
-docker run --rm -it \
-  --user $(id -u):$(id -g) \
-  -e HOME=/home/dev \
-  -v ~/.aws:/home/dev/.aws \
-  -v ~/.kube:/home/dev/.kube \
-  -w /home/dev \
-  heyvaldemar/aws-kubectl bash
+docker run --rm --user 0:0 heyvaldemar/aws-kubectl bash
 ```
-
-## Upgrade Notes
-
-> **v2.0 (planned)** will make non-root the default user. The current `:latest` tag runs as root for backward compatibility with existing users of the 500,000+ pulled image. A migration guide will accompany the `v2.0` release; pin `:kube-<X.Y.Z>` tags for reproducibility if this matters to you.
 
 ---
 

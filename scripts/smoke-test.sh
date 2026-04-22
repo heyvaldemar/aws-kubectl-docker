@@ -52,12 +52,14 @@ echo "OK: /etc/kube-version matches kubectl client version"
 
 # Optional real-world checks — these require local credentials and are
 # expected to be best-effort, so we still guard them with `|| true`.
+# As of v2.0 the image runs as UID 10001 with HOME=/home/app. Mount host config
+# under /home/app and pass --user so the container can read host-owned files.
 if [ -d "${HOME}/.aws" ]; then
-  run "docker run --rm -v '${HOME}/.aws:/root/.aws' '$IMAGE' aws sts get-caller-identity || true"
+  run "docker run --rm --user \"$(id -u):0\" -v '${HOME}/.aws:/home/app/.aws' '$IMAGE' aws sts get-caller-identity || true"
 fi
 if [ -d "${HOME}/.kube" ]; then
-  run "docker run --rm -v '${HOME}/.kube:/root/.kube' '$IMAGE' kubectl config current-context || true"
-  run "docker run --rm -v '${HOME}/.kube:/root/.kube' '$IMAGE' kubectl get nodes --request-timeout=5s -o name || true"
+  run "docker run --rm --user \"$(id -u):0\" -v '${HOME}/.kube:/home/app/.kube' '$IMAGE' kubectl config current-context || true"
+  run "docker run --rm --user \"$(id -u):0\" -v '${HOME}/.kube:/home/app/.kube' '$IMAGE' kubectl get nodes --request-timeout=5s -o name || true"
 fi
 
 say "All checks passed."

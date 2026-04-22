@@ -7,7 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-04-21
+
+### BREAKING CHANGES
+- Container now runs as non-root user (UID 10001, GID 0) by default. Users who depend
+  on running as root must override with `--user 0:0`. Volume mounts may require
+  adjusted file ownership or `--user "$(id -u):0"` so the container can read the
+  mounted host files. See the README "Breaking Changes in v2.0" section for the full
+  migration guide.
+- Default `WORKDIR` changed from `/` to `/home/app`. Scripts that assumed a specific
+  working directory should set it explicitly via `-w` or `WORKDIR`.
+- Default mount paths for AWS and kube configs documented as `/home/app/.aws` and
+  `/home/app/.kube` (previously `/root/.aws` and `/root/.kube`). The old paths still
+  work if you mount there **and** override with `--user 0:0`, but are no longer the
+  documented contract.
+
 ### Added
+- Non-root runtime user `app` (UID 10001, primary GID 0) created via `useradd
+  --system`. Home directory `/home/app` is owned by UID 10001, GID 0 with group-write
+  permissions (`chmod g=u`) for OpenShift SCC `restricted-v2` compatibility.
+- `HOME=/home/app` set via `ENV` so kubectl and AWS CLI cache directories
+  (`~/.kube/cache`, `~/.aws/cli/cache`, `~/.aws/sso/cache`) resolve correctly for
+  users who override `--user`.
+- Compatibility with OpenShift Security Context Constraints (SCC) `restricted-v2`
+  profile and Kubernetes `restricted` Pod Security Standard.
+- README "Breaking Changes in v2.0" section at the top of the document, with Docker
+  and Kubernetes migration examples and the `v1-maintenance` escape hatch.
+- README "Run as root (override)" section documenting `--user 0:0` for workflows that
+  need root inside the container.
+- Workflow tag patterns `type=semver,pattern={{major}}` (produces `2`) and
+  `type=ref,event=tag` (produces `v2.0.0`), so consumers can pin at three granularities:
+  `heyvaldemar/aws-kubectl:2`, `:2.0`, or `:2.0.0`.
 - Multi-stage `Dockerfile` with a dedicated `builder` stage. Build-only intermediate
   artefacts (the downloaded AWS CLI zip, its extracted tree, the kubectl archive and
   its checksum file) no longer pollute the final image.
@@ -46,6 +76,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   published image.
 
 ### Changed
+- Default `USER` directive changed from root (implicit) to `10001:0`.
+- Default `WORKDIR` changed to `/home/app`.
+- README volume-mount examples updated to mount under `/home/app/.aws` and
+  `/home/app/.kube` with `--user "$(id -u):0"` so host files remain readable by the
+  container's non-root user.
+- README `## Run as non-root (optional)` section renamed to `## Run as root
+  (override)` and rewritten — non-root is now the default, the escape hatch is root.
 - `scripts/smoke-test.sh` now fails hard on missing tools (no `|| true` fallbacks for core
   checks), asserts that `/etc/kube-version` matches `kubectl version --client`, and prefers
   `sh -c` over `bash -lc`.
@@ -94,11 +131,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `kubectl` binaries continue to be verified against the upstream SHA-256 checksum
   published at `dl.k8s.io` before installation. Verification now happens inside the
   isolated builder stage.
+- Non-root runtime by default removes an implicit privilege-escalation risk in
+  workflows that previously inherited root from `:latest`.
 
-### Backwards compatibility
-- No breaking changes for users pulling `heyvaldemar/aws-kubectl:latest`. The image name,
-  default `latest` tag, default `CMD ["bash"]`, default `root` user, and full toolchain
-  contract (`aws`, `kubectl`, `jq`, `envsubst`, `curl`, `unzip`, `ca-certificates`) are
+### Migration
+- Existing `v1.x` users: pin to `heyvaldemar/aws-kubectl:v1-maintenance` for 90 days
+  (through **2026-07-20**) of security updates while migrating. After that date the
+  `v1-maintenance` tag is frozen — no further rebuilds.
+- Most CI workflows (no volume mount, one-shot `aws`/`kubectl` commands) will work
   unchanged.
+- Docker volume-mount workflows: add `--user "$(id -u):0"` and change the mount path
+  from `/root/.aws` → `/home/app/.aws` (same for `.kube`).
+- Kubernetes workloads: set `securityContext.runAsUser: 10001`,
+  `runAsGroup: 0`, `fsGroup: 0`. See the README "Breaking Changes in v2.0" section
+  for the full spec.
 
-[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/commits/main
+[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/heyvaldemar/aws-kubectl-docker/releases/tag/v2.0.0
