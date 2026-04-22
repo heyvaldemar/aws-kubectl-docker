@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Weekly `Docker Hub Tag Cleanup` GitHub Actions workflow
+  (`.github/workflows/dockerhub-tag-cleanup.yml`). Deletes `sha-*` image tags
+  older than 90 days on Mondays at 07:00 UTC (one hour after the publish
+  rebuild), preventing unbounded tag accumulation on Docker Hub. Scheduled
+  runs auto-delete; manual `workflow_dispatch` defaults to dry-run for safety.
+- `scripts/cleanup-legacy-tags.sh` — one-shot local cleanup for legacy
+  long-SHA (40-char hex) tags from the pre-Phase-1 CI era. Dry-run by default;
+  `--execute` requires typed `DELETE` confirmation. The 19 target tags are
+  hardcoded in the script so the operation is auditable in version control.
+
+### Removed
+- 19 legacy long-SHA image tags from Docker Hub (ranging from ~5 months to
+  ~2 years old, all from the pre-Phase-1 CI era). These were never documented
+  as stable pins and carried accumulated CVE noise. Current-generation
+  consumers use semver tags (`:2.0.0`, `:2.0`, `:2`), floating channels
+  (`:latest`, `:edge`, `:v1-maintenance`), the `kube-vX.Y.Z` pin, or short
+  `sha-*` tags for the last 90 days of builds. Cosign `.sig` tags were
+  preserved.
+
 ## [2.0.0] - 2026-04-21
 
 ### BREAKING CHANGES

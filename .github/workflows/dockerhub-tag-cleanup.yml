@@ -1,0 +1,129 @@
+name: Docker Hub Tag Cleanup
+
+on:
+  schedule:
+    # Run weekly, Monday at 07:00 UTC — one hour AFTER the Monday 06:00 UTC
+    # rebuild in publish.yml, so we clean up immediately after fresh sha-*
+    # tags are produced (older ones crossing the 90-day threshold get swept
+    # the same morning).
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (list only, no deletion)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+concurrency:
+  group: dockerhub-tag-cleanup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Delete stale sha-* tags older than 90 days
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Get Docker Hub JWT
+        id: auth
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          JWT=$(curl -sS -f \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json" \
+            -X POST \
+            -d "{\"username\": \"${DOCKERHUB_USERNAME}\", \"password\": \"${DOCKERHUB_TOKEN}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r '.token')
+          if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
+            echo "::error::Failed to obtain Docker Hub JWT"
+            exit 1
+          fi
+          echo "::add-mask::$JWT"
+          echo "jwt=$JWT" >> "$GITHUB_OUTPUT"
+
+      - name: List and filter sha-* tags
+        id: filter
+        env:
+          JWT: ${{ steps.auth.outputs.jwt }}
+        run: |
+          # Cutoff: 90 days ago, ISO 8601 UTC.
+          CUTOFF=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "Cutoff date (delete tags updated before this): $CUTOFF"
+
+          # Fetch all tags with pagination.
+          ALL_TAGS_JSON=$(mktemp)
+          NEXT_URL="https://hub.docker.com/v2/repositories/heyvaldemar/aws-kubectl/tags/?page_size=100"
+          echo "[]" > "$ALL_TAGS_JSON"
+          while [ "$NEXT_URL" != "null" ] && [ -n "$NEXT_URL" ]; do
+            RESPONSE=$(curl -sS -f \
+              -H "Accept: application/json" \
+              -H "Authorization: Bearer $JWT" \
+              "$NEXT_URL")
+            echo "$RESPONSE" | jq '.results' > /tmp/page.json
+            jq -s '.[0] + .[1]' "$ALL_TAGS_JSON" /tmp/page.json > /tmp/merged.json
+            mv /tmp/merged.json "$ALL_TAGS_JSON"
+            NEXT_URL=$(echo "$RESPONSE" | jq -r '.next')
+          done
+
+          # Filter: name starts with 'sha-' AND last_updated < cutoff.
+          # This intentionally does NOT match 'sha256-*.sig' (cosign signatures)
+          # because those start with 'sha256-', not 'sha-'.
+          jq -r --arg cutoff "$CUTOFF" '
+            .[] | select(.name | startswith("sha-"))
+               | select(.last_updated < $cutoff)
+               | .name
+          ' "$ALL_TAGS_JSON" > /tmp/to_delete.txt
+
+          COUNT=$(wc -l < /tmp/to_delete.txt | tr -d ' ')
+          echo "Tags matching sha-* and older than 90 days: $COUNT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "Tags to process:"
+            cat /tmp/to_delete.txt
+          fi
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Delete filtered tags
+        if: steps.filter.outputs.count != '0'
+        env:
+          JWT: ${{ steps.auth.outputs.jwt }}
+          # Scheduled runs fall through the `|| 'false'` to auto-delete.
+          # Manual `workflow_dispatch` defaults to dry_run=true (safer for
+          # humans testing the workflow).
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          DELETED=0
+          ERRORS=0
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "[DRY-RUN] would delete: $tag"
+            else
+              HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+                -X DELETE \
+                -H "Accept: application/json" \
+                -H "Authorization: Bearer $JWT" \
+                "https://hub.docker.com/v2/repositories/heyvaldemar/aws-kubectl/tags/$tag/")
+              if [ "$HTTP_CODE" = "204" ]; then
+                echo "deleted: $tag"
+                DELETED=$((DELETED + 1))
+              else
+                echo "::warning::failed to delete $tag (HTTP $HTTP_CODE)"
+                ERRORS=$((ERRORS + 1))
+              fi
+              sleep 1
+            fi
+          done < /tmp/to_delete.txt
+
+          echo "Summary: deleted=$DELETED errors=$ERRORS"
+          if [ "$ERRORS" -gt 0 ]; then
+            exit 1
+          fi
