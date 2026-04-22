@@ -141,7 +141,15 @@ jobs:
           push-to-registry: false
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+        # Install Cosign v2.6.1 explicitly: cosign-installer v4 defaults to Cosign
+        # v3.x, which changes container signature storage to OCI 1.1 referring
+        # artifacts. Docker Hub's OCI referrer credential handoff proved unreliable
+        # in Phase 2 (see hotfix #20). Cosign v2 keeps tag-based .sig storage which
+        # works reliably on Docker Hub today. Full Cosign v3 migration is deferred
+        # to a separate tracked project.
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+        with:
+          cosign-release: "v2.6.1"
 
       - name: Sign image with cosign (keyless)
         if: github.event_name != 'pull_request'
