@@ -3,12 +3,123 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/heyvaldemar/aws-kubectl.svg)](https://hub.docker.com/r/heyvaldemar/aws-kubectl)
 [![Docker Image Size](https://img.shields.io/docker/image-size/heyvaldemar/aws-kubectl/latest.svg)](https://hub.docker.com/r/heyvaldemar/aws-kubectl/tags)
 [![Build Status](https://github.com/heyvaldemar/aws-kubectl-docker/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/aws-kubectl-docker/actions/workflows/publish.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/heyvaldemar/aws-kubectl-docker/badge)](https://scorecard.dev/viewer/?uri=github.com/heyvaldemar/aws-kubectl-docker)
+[![Cosign Verified](https://img.shields.io/badge/cosign-verified-brightgreen?logo=sigstore)](https://github.com/heyvaldemar/aws-kubectl-docker/attestations)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Contents
+
+- [Why this image?](#why-this-image)
+- [Getting started](#getting-started)
+- [Features](#features)
+- [Supply chain](#supply-chain)
+- [Tag management](#tag-management)
+- [Breaking Changes in v2.0](#breaking-changes-in-v20)
+- [Mounting credentials](#mounting-credentials)
+- [Running the Container](#running-the-container)
+- [Build Instructions](#build-instructions)
+- [Local Build & Test](#local-build--test-using-the-repo-script)
+- [Security Notes](#security-notes)
 
 This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bundling **AWS CLI v2** (`aws`) and **kubectl** on **Ubuntu 24.04**. It also includes `jq`, `curl`, `unzip`, and `envsubst` (from `gettext-base`). Perfect for CI/CD steps, automation, and reproducible local scripting.
 
 🐳 Docker Hub: [heyvaldemar/aws-kubectl](https://hub.docker.com/r/heyvaldemar/aws-kubectl)
+
+## Why this image?
+
+| Need | This image | `amazon/aws-cli` | `bitnami/kubectl` | Alpine + scripts |
+|------|-----------|------------------|-------------------|------------------|
+| AWS CLI v2 | ✅ | ✅ | ❌ | manual |
+| kubectl | ✅ | ❌ | ✅ | manual |
+| jq, envsubst, curl, unzip | ✅ | ❌ | ❌ | manual |
+| Multi-arch (amd64/arm64) | ✅ | ✅ | ✅ | depends |
+| Cosign signatures | ✅ | ✅ | ❌ | ❌ |
+| SBOM (SPDX) | ✅ | ❌ | ❌ | ❌ |
+| SLSA build provenance | ✅ | ❌ | ❌ | ❌ |
+| OpenSSF Scorecard | 7.8/10 | N/A | N/A | N/A |
+| Non-root default (UID 10001) | ✅ (v2.0+) | ❌ | ❌ | depends |
+| Weekly base rebuild | ✅ | ✅ | ✅ | manual |
+
+One image instead of three. Full supply-chain attestations. OpenShift-compatible out of the box.
+
+## Getting started
+
+```bash
+# List S3 buckets (requires ~/.aws)
+docker run --rm --user "$(id -u):0" \
+  -v ~/.aws:/home/app/.aws \
+  heyvaldemar/aws-kubectl aws s3 ls
+
+# Get Kubernetes nodes (requires ~/.kube)
+docker run --rm --user "$(id -u):0" \
+  -v ~/.kube:/home/app/.kube \
+  heyvaldemar/aws-kubectl kubectl get nodes
+
+# Interactive shell with both
+docker run -it --user "$(id -u):0" \
+  -v ~/.aws:/home/app/.aws \
+  -v ~/.kube:/home/app/.kube \
+  heyvaldemar/aws-kubectl bash
+```
+
+Runs as non-root by default (UID 10001). See [Mounting credentials](#mounting-credentials) for permission details.
+
+> 🚨 **Existing v1.x user and v2.0 broke your workflow?** Pin `heyvaldemar/aws-kubectl:v1-maintenance` for security updates through July 2026. [Migration details →](#breaking-changes-in-v20)
+
+## Features
+
+- **Ubuntu 24.04** base for stability.
+- **AWS CLI v2** for full AWS management.
+- **kubectl** (pin a specific version or use the latest stable at build time).
+- `jq`, `curl`, `unzip`, `envsubst`, and `ca-certificates` preinstalled.
+- **Multi-stage build**: build-only intermediates (AWS CLI zip, extracted tree, kubectl archive) never enter the final image.
+- **Checksum verification** for `kubectl` during build.
+- **Multi-arch ready** (amd64/arm64) when built/pushed with `buildx`.
+- **OCI labels** (`org.opencontainers.image.*`) on every published image.
+- **Resolved kubectl version** written to `/etc/kube-version` inside the image.
+
+> Default user is **non-root (UID 10001, GID 0)** as of v2.0. If you need root — e.g. to install additional `apt` packages at runtime — override with `--user 0:0`. See [Breaking Changes in v2.0](#breaking-changes-in-v20) for migration details.
+
+### Typical use cases
+
+- **GitHub Actions / GitLab CI pipelines** — one image instead of installing aws-cli + kubectl + jq separately in every job
+- **EKS cluster operations** — AWS auth via aws-cli, then kubectl against the cluster, in a single container
+- **OpenShift / restricted PodSecurityPolicy environments** — non-root default (UID 10001, GID 0) works out of the box
+- **Multi-cluster scripting** — consistent tooling across dev/staging/prod kubeconfigs
+- **Air-gapped or restricted networks** — pre-built image with checksum-verified binaries, no runtime `curl | bash`
+
+## Supply chain
+
+- Base image pinned by `sha256` digest (`ubuntu:24.04@sha256:…`). Dependabot's `docker` ecosystem bumps the digest weekly.
+- Multi-stage `Dockerfile` keeps build-only intermediate artefacts (the downloaded AWS CLI archive, extracted tree, kubectl tarball, and checksum file) out of the published image.
+- `kubectl` binaries are verified against the upstream `sha256` checksum published at `dl.k8s.io` during build.
+- Weekly scheduled rebuilds pick up Ubuntu base-image security updates (`cron: "0 6 * * 1"`).
+- CI lints the Dockerfile with `hadolint` and shell scripts with `shellcheck` before any build runs.
+- All third-party GitHub Actions are pinned to a commit SHA with a version comment.
+- Build arguments `VCS_REF` and `BUILD_DATE` are stamped into `org.opencontainers.image.revision` and `org.opencontainers.image.created`, and the resolved kubectl release is exposed via `io.heyvaldemar.kubectl.version` and `/etc/kube-version`.
+- Every published digest is **cosign-signed** via Sigstore keyless OIDC using the GitHub Actions identity for this repository.
+- **SBOM** (SPDX, generated by BuildKit) and **SLSA build provenance** (`provenance: mode=max`) are attached to every published image.
+- **GitHub native build provenance** is attested via `actions/attest-build-provenance` and pushed to the registry alongside the image.
+- **Trivy** scans the published image on every push; CRITICAL and HIGH fixable findings are uploaded as SARIF to the repository's GitHub Security tab.
+
+### Verifying signatures
+
+```bash
+cosign verify heyvaldemar/aws-kubectl:latest \
+  --certificate-identity-regexp "https://github.com/heyvaldemar/aws-kubectl-docker/.*" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+```
+
+## Tag management
+
+Tags fall into four categories:
+
+- **Semver releases** (`:2.0.0`, `:2.0`, `:2`, `:v2.0.0`) — immutable, kept forever. Recommended for production pins.
+- **Floating channels** (`:latest`, `:edge`, `:v1-maintenance`) — updated on every main build; kept forever.
+- **Kubernetes-version pin** (`:kube-v1.35.4`) — tracks the kubectl release packaged into the image. Kept forever.
+- **Short-SHA builds** (`:sha-<7char>`) — produced by CI for every commit to main. Retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
+
+Cosign signatures (`:sha256-<digest>.sig`) are managed by Sigstore and are not deleted.
 
 ## Breaking Changes in v2.0
 
@@ -56,62 +167,7 @@ docker pull heyvaldemar/aws-kubectl:v1-maintenance
 The `v1-maintenance` tag will receive security updates through **July 20, 2026**,
 after which it will be frozen.
 
-## Features
-
-- **Ubuntu 24.04** base for stability.
-- **AWS CLI v2** for full AWS management.
-- **kubectl** (pin a specific version or use the latest stable at build time).
-- `jq`, `curl`, `unzip`, `envsubst`, and `ca-certificates` preinstalled.
-- **Multi-stage build**: build-only intermediates (AWS CLI zip, extracted tree, kubectl archive) never enter the final image.
-- **Checksum verification** for `kubectl` during build.
-- **Multi-arch ready** (amd64/arm64) when built/pushed with `buildx`.
-- **OCI labels** (`org.opencontainers.image.*`) on every published image.
-- **Resolved kubectl version** written to `/etc/kube-version` inside the image.
-
-> Default user is **non-root (UID 10001, GID 0)** as of v2.0. If you need root — e.g. to install additional `apt` packages at runtime — override with `--user 0:0`. See [Breaking Changes in v2.0](#breaking-changes-in-v20) for migration details.
-
-## Supply chain
-
-- Base image pinned by `sha256` digest (`ubuntu:24.04@sha256:…`). Dependabot's `docker` ecosystem bumps the digest weekly.
-- Multi-stage `Dockerfile` keeps build-only intermediate artefacts (the downloaded AWS CLI archive, extracted tree, kubectl tarball, and checksum file) out of the published image.
-- `kubectl` binaries are verified against the upstream `sha256` checksum published at `dl.k8s.io` during build.
-- Weekly scheduled rebuilds pick up Ubuntu base-image security updates (`cron: "0 6 * * 1"`).
-- CI lints the Dockerfile with `hadolint` and shell scripts with `shellcheck` before any build runs.
-- All third-party GitHub Actions are pinned to a commit SHA with a version comment.
-- Build arguments `VCS_REF` and `BUILD_DATE` are stamped into `org.opencontainers.image.revision` and `org.opencontainers.image.created`, and the resolved kubectl release is exposed via `io.heyvaldemar.kubectl.version` and `/etc/kube-version`.
-- Every published digest is **cosign-signed** via Sigstore keyless OIDC using the GitHub Actions identity for this repository.
-- **SBOM** (SPDX, generated by BuildKit) and **SLSA build provenance** (`provenance: mode=max`) are attached to every published image.
-- **GitHub native build provenance** is attested via `actions/attest-build-provenance` and pushed to the registry alongside the image.
-- **Trivy** scans the published image on every push; CRITICAL and HIGH fixable findings are uploaded as SARIF to the repository's GitHub Security tab.
-
-### Verifying signatures
-
-```bash
-cosign verify heyvaldemar/aws-kubectl:latest \
-  --certificate-identity-regexp "https://github.com/heyvaldemar/aws-kubectl-docker/.*" \
-  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
-```
-
-> Non-root runtime shipped in **v2.0**. See [Breaking Changes in v2.0](#breaking-changes-in-v20) for migration details and the 90-day `v1-maintenance` track.
-
-### Tag management
-
-Tags fall into four categories:
-
-- **Semver releases** (`:2.0.0`, `:2.0`, `:2`, `:v2.0.0`) — immutable, kept forever. Recommended for production pins.
-- **Floating channels** (`:latest`, `:edge`, `:v1-maintenance`) — updated on every main build; kept forever.
-- **Kubernetes-version pin** (`:kube-v1.35.4`) — tracks the kubectl release packaged into the image. Kept forever.
-- **Short-SHA builds** (`:sha-<7char>`) — produced by CI for every commit to main. Retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
-
-Cosign signatures (`:sha256-<digest>.sig`) are managed by Sigstore and are not deleted.
-
-## Use Cases
-
-- **CI/CD**: run `aws`/`kubectl` steps in pipelines.
-- **Local dev**: test commands before rolling into automation.
-- **Scripting**: consistent, portable tooling wrapper.
-
-## Prerequisites
+## Mounting credentials
 
 - `~/.aws` – AWS credentials/config (`credentials`, `config`). Mount to `/home/app/.aws` inside the container.
 - `~/.kube` – kubeconfig(s). Mount to `/home/app/.kube` inside the container.
@@ -253,7 +309,8 @@ The script checks:
 - HTTPS reachability (header-only)
 - (Optional) AWS STS + `kubectl` cluster calls if you mount `~/.aws` / `~/.kube`
 
-## Quick Verification (manual one-liners)
+<details>
+<summary>Quick verification one-liners (click to expand)</summary>
 
 ```bash
 IMG=aws-kubectl:local
@@ -298,18 +355,7 @@ docker run --rm --user "$(id -u):0" \
   aws-kubectl:local kubectl get nodes -o wide
 ```
 
-## Tagging / Versioning Policy
-
-To avoid OS-specific tags in docs and keep usage predictable:
-
-- `latest` – rolling, multi-arch build with current defaults.
-- `kube-<X.Y.Z>` – pinned `kubectl` version (e.g., `kube-1.30.6`).
-- `<commit-sha>` – immutable builds tied to the Git commit (CI-friendly).
-- Optional **minor** rolling tag:
-
-  - `kube-<X.Y>` → floats to the newest patch for that minor (e.g., `kube-1.30` → `1.30.6`)
-
-> Tip: match `kubectl` to your cluster’s version skew policy (n-1 / n / n+1).
+</details>
 
 ## Security Notes
 
@@ -331,39 +377,11 @@ docker run --rm --user 0:0 heyvaldemar/aws-kubectl bash
 <!-- ABOUT:START -->
 <div align="center">
 
-# Vladimir Mikhalev
+**Maintained by [Vladimir Mikhalev](https://heyvaldemar.com)** — Docker Captain, IBM Champion, AWS Community Builder.
 
-**Docker Captain · IBM Champion · AWS Community Builder · Platform Engineering Ambassador**
+20+ years designing cloud infrastructure at Amazon, IBM, Thales, and Ataccama.
 
-</div>
-
-### What I Do
-
-One of fewer than 250 Docker Captains worldwide. 8 vendor-recognized community titles across Docker, IBM, AWS, Snyk, Cypress, Notion, GitKraken, and Platform Engineering — earned through contribution, not credentials.
-
-Every architecture recommendation backed by production experience. 20+ years designing and delivering cloud infrastructure at Amazon, IBM, Thales, and a Series D data platform serving Fortune 500 clients. I design scalable systems and publish what I learn — reference architectures for container security, AI governance, and platform engineering used by practitioners worldwide.
-
-### Recognition
-
-*Docker CEO on my contributions to the ecosystem*
-
-<div align="center">
-
-[![Docker CEO Scott Johnston recognizes Vladimir Mikhalev at Docker Captains Summit 2024](https://img.youtube.com/vi/NAv1e36PTB8/mqdefault.jpg)](https://www.youtube.com/watch?v=NAv1e36PTB8&t=58)
-
-</div>
-
-> *"Vladimir has written more than 100 pieces of content for Docker in the past year. He has also helped us find customer stories that we've been able to document and share throughout the rest of the community. And he's met with multiple product managers internally to share his product feedback."*
->
-> — Scott Johnston, CEO of Docker
-
----
-
-<div align="center">
-
-*The Verdict — production-tested analysis on YouTube.*
-
-[YouTube](https://www.youtube.com/channel/UCf85kQ0u1sYTTTyKVpxrlyQ?sub_confirmation=1) · [Blog](https://heyvaldemar.com) · [LinkedIn](https://www.linkedin.com/in/heyvaldemar/)
+[YouTube](https://www.youtube.com/channel/UCf85kQ0u1sYTTTyKVpxrlyQ?sub_confirmation=1) · [Blog](https://heyvaldemar.com) · [LinkedIn](https://www.linkedin.com/in/heyvaldemar/) · [About the maintainer →](BIO.md)
 
 </div>
 <!-- ABOUT:END -->
