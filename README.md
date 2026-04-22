@@ -93,6 +93,17 @@ cosign verify heyvaldemar/aws-kubectl:latest \
 
 > Non-root runtime shipped in **v2.0**. See [Breaking Changes in v2.0](#breaking-changes-in-v20) for migration details and the 90-day `v1-maintenance` track.
 
+### Tag management
+
+Tags fall into four categories:
+
+- **Semver releases** (`:2.0.0`, `:2.0`, `:2`, `:v2.0.0`) — immutable, kept forever. Recommended for production pins.
+- **Floating channels** (`:latest`, `:edge`, `:v1-maintenance`) — updated on every main build; kept forever.
+- **Kubernetes-version pin** (`:kube-v1.35.4`) — tracks the kubectl release packaged into the image. Kept forever.
+- **Short-SHA builds** (`:sha-<7char>`) — produced by CI for every commit to main. Retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
+
+Cosign signatures (`:sha256-<digest>.sig`) are managed by Sigstore and are not deleted.
+
 ## Use Cases
 
 - **CI/CD**: run `aws`/`kubectl` steps in pipelines.
