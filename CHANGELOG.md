@@ -24,6 +24,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long-SHA (40-char hex) tags from the pre-Phase-1 CI era. Dry-run by default;
   `--execute` requires typed `DELETE` confirmation. The 19 target tags are
   hardcoded in the script so the operation is auditable in version control.
+- Cosign Verified badge in README linking to the attestations page.
+- `BIO.md` — maintainer bio with the full Docker CEO recognition video and
+  quote, linked from the README footer.
+
+### Changed
+- README restructured for evaluator-first audience: added "Why this image?"
+  comparison table (vs. `amazon/aws-cli`, `bitnami/kubectl`, Alpine+scripts),
+  added "Getting started" quickstart with three concrete invocations, moved
+  "Tag management" up to position 6, moved "Breaking Changes in v2.0" down
+  to position 7 (after established context), collapsed the Quick Verification
+  one-liner wall under `<details>`, reordered badges (security before legal),
+  added a Table of Contents, and renamed "Prerequisites" to "Mounting
+  credentials" for clarity.
+- Badge row reordered: usage → size → CI → security → supply-chain → legal.
+- Obsolete "Tagging / Versioning Policy" section removed — superseded by the
+  newer "Tag management" section, which reflects current tag categories and
+  the 90-day `sha-*` retention policy.
+- ABOUT section in README trimmed to a six-line maintainer footer; the full
+  bio, Docker CEO recognition video, and Scott Johnston quote moved to
+  `BIO.md`.
 
 ### Removed
 - 19 legacy long-SHA image tags from Docker Hub (ranging from ~5 months to
