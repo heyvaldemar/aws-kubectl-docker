@@ -142,12 +142,13 @@ cosign verify heyvaldemar/aws-kubectl:latest \
 
 ## Tag management
 
-Tags fall into four categories:
+Tags fall into five categories:
 
-- **Semver releases** (`:2.0.0`, `:2.0`, `:2`, `:v2.0.0`) — immutable, kept forever. Recommended for production pins.
+- **Exact semver** (`:2.0.0`, `:v2.0.0`) — immutable on Docker Hub; the digest under these tags never changes after first push. Recommended for production pins.
+- **Rolling semver** (`:2.0`, `:2`) — mutable; re-targets to the newest patch (and minor) within the major on each release. Kept forever.
 - **Floating channels** (`:latest`, `:edge`, `:v1-maintenance`) — updated on every main build; kept forever.
-- **Kubernetes-version pin** (`:kube-v1.35.4`) — tracks the kubectl release packaged into the image. Kept forever.
-- **Short-SHA builds** (`:sha-<7char>`) — produced by CI for every commit to main. Retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
+- **Kubernetes-version pin** (`:kube-v1.35.4`) — tracks the kubectl release packaged into the image. Immutable on Docker Hub; kept forever.
+- **Short-SHA builds** (`:sha-<7char>`) — produced by CI for every commit to main. Immutable while live; retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
 
 Cosign signatures (`:sha256-<digest>.sig`) are managed by Sigstore and are not deleted.
 
