@@ -9,17 +9,33 @@
 
 ## Contents
 
-- [Why this image?](#why-this-image)
-- [Getting started](#getting-started)
-- [Features](#features)
-- [Supply chain](#supply-chain)
-- [Tag management](#tag-management)
-- [Breaking Changes in v2.0](#breaking-changes-in-v20)
-- [Mounting credentials](#mounting-credentials)
-- [Running the Container](#running-the-container)
-- [Build Instructions](#build-instructions)
-- [Local Build & Test](#local-build--test-using-the-repo-script)
-- [Security Notes](#security-notes)
+- [aws-kubectl Docker Image](#aws-kubectl-docker-image)
+  - [Contents](#contents)
+  - [Why this image?](#why-this-image)
+  - [Getting started](#getting-started)
+  - [Pinning guidance](#pinning-guidance)
+  - [Features](#features)
+    - [Typical use cases](#typical-use-cases)
+  - [Supply chain](#supply-chain)
+    - [Verifying signatures](#verifying-signatures)
+  - [Tag management](#tag-management)
+  - [Breaking Changes in v2.0](#breaking-changes-in-v20)
+    - [For most users: no changes needed](#for-most-users-no-changes-needed)
+    - [For users mounting volumes](#for-users-mounting-volumes)
+    - [Staying on v1.x](#staying-on-v1x)
+  - [Mounting credentials](#mounting-credentials)
+  - [Running the Container](#running-the-container)
+    - [Execute commands directly (no shell)](#execute-commands-directly-no-shell)
+  - [Build Instructions](#build-instructions)
+    - [Local single-arch (dev)](#local-single-arch-dev)
+    - [Pin a specific kubectl](#pin-a-specific-kubectl)
+    - [Stamp revision and build date (recommended for release builds)](#stamp-revision-and-build-date-recommended-for-release-builds)
+    - [Multi-arch build \& push (amd64 + arm64)](#multi-arch-build--push-amd64--arm64)
+  - [Local Build \& Test (using the repo script)](#local-build--test-using-the-repo-script)
+    - [Optional “real” checks (with mounted config)](#optional-real-checks-with-mounted-config)
+  - [Security Notes](#security-notes)
+  - [Run as root (override)](#run-as-root-override)
+  - [About the maintainer](#about-the-maintainer)
 
 This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bundling **AWS CLI v2** (`aws`) and **kubectl** on **Ubuntu 24.04**. It also includes `jq`, `curl`, `unzip`, and `envsubst` (from `gettext-base`). Perfect for CI/CD steps, automation, and reproducible local scripting.
 
@@ -65,6 +81,20 @@ docker run -it --user "$(id -u):0" \
 Runs as non-root by default (UID 10001). See [Mounting credentials](#mounting-credentials) for permission details.
 
 > 🚨 **Existing v1.x user and v2.0 broke your workflow?** Pin `heyvaldemar/aws-kubectl:v1-maintenance` for security updates through July 2026. [Migration details →](#breaking-changes-in-v20)
+
+## Pinning guidance
+
+For production use, pin to **immutable semver tags**:
+
+- ✅ **Stable:** `heyvaldemar/aws-kubectl:2.0.0` — immutable on Docker Hub, never purged
+- ⚠️ **Fragile:** `heyvaldemar/aws-kubectl:sha-1dfda81` — short-SHA tags are deleted after 90 days
+
+If you pin by manifest digest (recommended for maximum supply chain integrity), make sure the digest is also referenced by a semver tag. Otherwise the digest may become unpullable once short-SHA cleanup runs. To resolve a tag to its current digest:
+
+```bash
+docker buildx imagetools inspect heyvaldemar/aws-kubectl:2.0.0 \
+  --format '{{.Manifest.Digest}}'
+```
 
 ## Features
 
@@ -374,14 +404,12 @@ docker run --rm --user 0:0 heyvaldemar/aws-kubectl bash
 
 ---
 
-<!-- ABOUT:START -->
+## About the maintainer
+
 <div align="center">
 
-**Maintained by [Vladimir Mikhalev](https://heyvaldemar.com)** — Docker Captain, IBM Champion, AWS Community Builder.
+**Maintained by [Vladimir Mikhalev](https://github.com/heyvaldemar)** — Docker Captain · IBM Champion · AWS Community Builder
 
-20+ years designing cloud infrastructure at Amazon, IBM, Thales, and Ataccama.
-
-[YouTube](https://www.youtube.com/channel/UCf85kQ0u1sYTTTyKVpxrlyQ?sub_confirmation=1) · [Blog](https://heyvaldemar.com) · [LinkedIn](https://www.linkedin.com/in/heyvaldemar/) · [About the maintainer →](BIO.md)
+[YouTube](https://www.youtube.com/channel/UCf85kQ0u1sYTTTyKVpxrlyQ?sub_confirmation=1) · [Blog](https://heyvaldemar.com) · [LinkedIn](https://www.linkedin.com/in/heyvaldemar/)
 
 </div>
-<!-- ABOUT:END -->
