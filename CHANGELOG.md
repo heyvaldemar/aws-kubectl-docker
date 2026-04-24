@@ -25,8 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--execute` requires typed `DELETE` confirmation. The 19 target tags are
   hardcoded in the script so the operation is auditable in version control.
 - Cosign Verified badge in README linking to the attestations page.
-- `BIO.md` — maintainer bio with the full Docker CEO recognition video and
-  quote, linked from the README footer.
 
 ### Changed
 - README restructured for evaluator-first audience: added "Why this image?"
@@ -41,9 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Obsolete "Tagging / Versioning Policy" section removed — superseded by the
   newer "Tag management" section, which reflects current tag categories and
   the 90-day `sha-*` retention policy.
-- ABOUT section in README trimmed to a six-line maintainer footer; the full
-  bio, Docker CEO recognition video, and Scott Johnston quote moved to
-  `BIO.md`.
+- ABOUT section in README trimmed to a compact maintainer footer (YouTube · Blog · LinkedIn). The Docker CEO recognition video and Scott Johnston quote live in the profile README at [github.com/heyvaldemar/heyvaldemar](https://github.com/heyvaldemar/heyvaldemar), not duplicated into individual repos.
 
 ### Removed
 - 19 legacy long-SHA image tags from Docker Hub (ranging from ~5 months to
