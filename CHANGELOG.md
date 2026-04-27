@@ -51,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserved.
 
 ### Fixed
+- CI workflow: `kube-v*` tag now only generated on semver tag releases (was
+  previously generated on every push, causing Docker Hub immutability conflicts
+  after the immutability policy was enabled). Main pushes no longer fail at
+  the publish step. The cosign signing step now runs reliably for `:latest`,
+  restoring signatures on floating tags.
+- CI workflow: cosign signing step now uses `set -euo pipefail` and explicit
+  per-tag error handling, preventing silent partial signing failures.
 - OpenSSF Scorecard publication to `api.scorecard.dev` — corrected the
   `ossf/scorecard-action` pin from the annotated tag object SHA (`99c09fe`)
   to the actual commit SHA (`4eaacf0`). The previous pin used the tag object
