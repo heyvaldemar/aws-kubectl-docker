@@ -141,6 +141,7 @@ jobs:
           push-to-registry: false
 
       - name: Install cosign
+        if: github.event_name != 'pull_request'
         # Install Cosign v2.6.1 explicitly: cosign-installer v4 defaults to Cosign
         # v3.x, which changes container signature storage to OCI 1.1 referring
         # artifacts. Docker Hub's OCI referrer credential handoff proved unreliable
