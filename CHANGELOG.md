@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserved.
 
 ### Fixed
+- CI workflow: `Install cosign` step now skipped on PR builds, mirroring the existing PR-skip pattern on `Login to Docker Hub`, `Attest build provenance`, and `Sign image with cosign`. Removes ~30s of wasted work per PR build and eliminates GitHub releases CDN as a PR-build flake surface (hit a transient 502 on PR #32 requiring a re-run).
 - CI workflow: `kube-v*` tag now only generated on semver tag releases (was
   previously generated on every push, causing Docker Hub immutability conflicts
   after the immutability policy was enabled). Main pushes no longer fail at
