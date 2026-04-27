@@ -147,7 +147,7 @@ Tags fall into five categories:
 - **Exact semver** (`:2.0.0`, `:v2.0.0`) — immutable on Docker Hub; the digest under these tags never changes after first push. Recommended for production pins.
 - **Rolling semver** (`:2.0`, `:2`) — mutable; re-targets to the newest patch (and minor) within the major on each release. Kept forever.
 - **Floating channels** (`:latest`, `:edge`, `:v1-maintenance`) — updated on every main build; kept forever.
-- **Kubernetes-version pin** (`:kube-v1.35.4`) — tracks the kubectl release packaged into the image. Immutable on Docker Hub; kept forever.
+- **Kubernetes-version pin** (`:kube-v1.36.0`) — generated only on semver releases. Tracks the kubectl release packaged into the image at the time of that release. Immutable on Docker Hub; kept forever.
 - **Short-SHA builds** (`:sha-<7char>`) — produced by CI for every commit to main. Immutable while live; retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
 
 Cosign signatures (`:sha256-<digest>.sig`) are managed by Sigstore and are not deleted.

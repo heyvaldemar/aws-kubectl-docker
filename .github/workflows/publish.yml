@@ -101,7 +101,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha,prefix=sha-,format=short
-            type=raw,value=kube-${{ steps.kube.outputs.version }}
+            type=raw,value=kube-${{ steps.kube.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
           labels: |
             org.opencontainers.image.title=aws-kubectl
             org.opencontainers.image.description=Ubuntu 24.04 image bundling AWS CLI v2, kubectl, jq, envsubst, curl and ca-certificates for CI/CD and local tooling.
@@ -157,7 +157,17 @@ jobs:
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+          set -euo pipefail
+          if [ -z "${TAGS}" ] || [ -z "${DIGEST}" ]; then
+            echo "ERROR: TAGS or DIGEST is empty" >&2
+            exit 1
+          fi
+          echo "${TAGS}" | while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "Signing: ${tag}@${DIGEST}"
+            cosign sign --yes "${tag}@${DIGEST}"
+          done
+          echo "All tags signed successfully"
 
   scan-trivy:
     name: Scan published image with Trivy
