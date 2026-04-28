@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserved.
 
 ### Fixed
+- README: corrected stale claim about `actions/attest-build-provenance` registry push behavior. The line was introduced in PR #16 when registry push was attempted, but was never updated after PR #20 hotfix flipped `push-to-registry: false` due to Docker Hub OCI referrer credential handoff issues. README now correctly describes attestations as stored in GitHub Attestations only.
 - CI workflow: `Install cosign` step now skipped on PR builds, mirroring the existing PR-skip pattern on `Login to Docker Hub`, `Attest build provenance`, and `Sign image with cosign`. Removes ~30s of wasted work per PR build and eliminates GitHub releases CDN as a PR-build flake surface (hit a transient 502 on PR #32 requiring a re-run).
 - CI workflow: `kube-v*` tag now only generated on semver tag releases (was
   previously generated on every push, causing Docker Hub immutability conflicts
