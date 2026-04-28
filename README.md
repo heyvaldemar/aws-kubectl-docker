@@ -35,6 +35,7 @@
     - [Optional “real” checks (with mounted config)](#optional-real-checks-with-mounted-config)
   - [Security Notes](#security-notes)
   - [Run as root (override)](#run-as-root-override)
+  - [Standardization reference](#standardization-reference)
   - [About the maintainer](#about-the-maintainer)
 
 This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bundling **AWS CLI v2** (`aws`) and **kubectl** on **Ubuntu 24.04**. It also includes `jq`, `curl`, `unzip`, and `envsubst` (from `gettext-base`). Perfect for CI/CD steps, automation, and reproducible local scripting.
@@ -402,6 +403,20 @@ If a specific workflow requires root inside the container (e.g. installing addit
 ```bash
 docker run --rm --user 0:0 heyvaldemar/aws-kubectl bash
 ```
+
+## Standardization reference
+
+The patterns in this image are codified as a reusable standard at [`heyvaldemar/self-host-repo-hardening-runbook` → `IMAGE-PUBLISHING-RUNBOOK.md`](https://github.com/heyvaldemar/self-host-repo-hardening-runbook/blob/main/IMAGE-PUBLISHING-RUNBOOK.md). If you maintain a Dockerfile-based repo and want to follow the same standard, the runbook covers:
+
+- Multi-stage Dockerfile with base-image digest pinning
+- Full OCI labels (`org.opencontainers.image.*`)
+- BuildKit attestations (SBOM + SLSA `provenance: mode=max`)
+- Cosign keyless signing via Sigstore (with rationale for pinning Cosign v2.6.1 over v3.x)
+- Tag retention + Docker Hub immutability policy
+- Weekly base-image rebuild via cron
+- Pinning guidance documentation for downstream consumers
+
+Six mandatory phases plus an optional non-root migration phase for repos with existing `:latest` audiences. Eight production-grounded pitfalls drawn from this repo's own PR history.
 
 ---
 
