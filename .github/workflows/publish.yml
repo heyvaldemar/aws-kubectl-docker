@@ -100,7 +100,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha,prefix=sha-,format=short
+            type=sha,prefix=sha-,format=short,enable=${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
             type=raw,value=kube-${{ steps.kube.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
           labels: |
             org.opencontainers.image.title=aws-kubectl

@@ -66,6 +66,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SHA returned by GitHub's `git/refs/tags/...` API; Scorecard's
   imposter-commit verification rejected it and refused to publish results,
   blocking README badge activation. `v2.4.3` itself is unchanged.
+- CI workflow: `sha-*` tag emission scoped to `push` and `pull_request`
+  events only. Same root cause as the prior `kube-v*` and `:latest` fixes:
+  the weekly scheduled rebuild and `workflow_dispatch` reuse the source SHA
+  but produce a fresh image manifest digest (newer base layers), and pushing
+  to `sha-<X>` is rejected by Docker Hub's tag-immutability policy with
+  HTTP 403. Surfaced by the 2026-05-04 cron run, which collided with the
+  `sha-0546ce8` tag pushed earlier the same day by the Dependabot
+  `github/codeql-action` bump (PR #36). Fix mirrors the `kube-v*` pattern:
+  `enable=${{ github.event_name == 'push' || github.event_name == 'pull_request' }}`.
+  PR builds keep emitting the tag for label completeness; `push: false` keeps
+  it out of the registry. Schedule and manual dispatch now only re-tag the
+  mutable `:latest` and `:edge` channels with fresh base layers, preserving
+  the "first push owns the immutable `sha-*` tag" semantic that downstream
+  consumers depend on.
 
 ## [2.0.0] - 2026-04-21
 
