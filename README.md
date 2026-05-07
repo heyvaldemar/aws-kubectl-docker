@@ -12,6 +12,7 @@
 - [aws-kubectl Docker Image](#aws-kubectl-docker-image)
   - [Contents](#contents)
   - [Why this image?](#why-this-image)
+  - [Prerequisites](#prerequisites)
   - [Getting started](#getting-started)
   - [Pinning guidance](#pinning-guidance)
   - [Features](#features)
@@ -58,6 +59,14 @@ This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bun
 | Weekly base rebuild | ✅ | ✅ | ✅ | manual |
 
 One image instead of three. Full supply-chain attestations. OpenShift-compatible out of the box.
+
+## Prerequisites
+
+- **Docker installed locally.** Quick check: `docker version`. The image ships AWS CLI v2 and `kubectl` inside, so you don't need either installed on your host. Multi-arch (amd64 + arm64) — works on Linux, macOS (Intel + Apple Silicon), Windows + WSL2.
+- **(Optional) AWS credentials in `~/.aws/`** if you want to run AWS commands. Create with `aws configure` from any machine that has aws-cli — or copy from an existing setup. The image mounts the dir read-only by convention.
+- **(Optional) `kubeconfig` in `~/.kube/`** if you want to run `kubectl` commands against an existing cluster. Create with `aws eks update-kubeconfig --name <cluster>` or your tool of choice.
+
+You can also run the container with no mounts for `aws --version`, `kubectl version --client`, or any tool that doesn't need cloud/cluster credentials.
 
 ## Getting started
 
