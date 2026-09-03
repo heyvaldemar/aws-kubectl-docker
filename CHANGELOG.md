@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   older than 90 days on Mondays at 07:00 UTC (one hour after the publish
   rebuild), preventing unbounded tag accumulation on Docker Hub. Scheduled
   runs auto-delete; manual `workflow_dispatch` defaults to dry-run for safety.
-- `scripts/cleanup-legacy-tags.sh` — one-shot local cleanup for legacy
+- `scripts/cleanup-legacy-tags.sh`: one-shot local cleanup for legacy
   long-SHA (40-char hex) tags from the pre-Phase-1 CI era. Dry-run by default;
   `--execute` requires typed `DELETE` confirmation. The 19 target tags are
   hardcoded in the script so the operation is auditable in version control.
@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added a Table of Contents, and renamed "Prerequisites" to "Mounting
   credentials" for clarity.
 - Badge row reordered: usage → size → CI → security → supply-chain → legal.
-- Obsolete "Tagging / Versioning Policy" section removed — superseded by the
+- Obsolete "Tagging / Versioning Policy" section removed, superseded by the
   newer "Tag management" section, which reflects current tag categories and
   the 90-day `sha-*` retention policy.
 - ABOUT section in README trimmed to a compact maintainer footer (YouTube · Blog · LinkedIn). The Docker CEO recognition video and Scott Johnston quote live in the profile README at [github.com/heyvaldemar/heyvaldemar](https://github.com/heyvaldemar/heyvaldemar), not duplicated into individual repos.
@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restoring signatures on floating tags.
 - CI workflow: cosign signing step now uses `set -euo pipefail` and explicit
   per-tag error handling, preventing silent partial signing failures.
-- OpenSSF Scorecard publication to `api.scorecard.dev` — corrected the
+- OpenSSF Scorecard publication to `api.scorecard.dev`, corrected the
   `ossf/scorecard-action` pin from the annotated tag object SHA (`99c09fe`)
   to the actual commit SHA (`4eaacf0`). The previous pin used the tag object
   SHA returned by GitHub's `git/refs/tags/...` API; Scorecard's
@@ -93,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   working directory should set it explicitly via `-w` or `WORKDIR`.
 - Default mount paths for AWS and kube configs documented as `/home/app/.aws` and
   `/home/app/.kube` (previously `/root/.aws` and `/root/.kube`). The old paths still
-  work if you mount there **and** override with `--user 0:0`, but are no longer the
+  work if you mount there and override with `--user 0:0`, but are no longer the
   documented contract.
 
 ### Added
@@ -140,13 +140,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub native build provenance attestation via `actions/attest-build-provenance`.
 - Trivy vulnerability scan on every published image, uploading SARIF to the GitHub
   Security tab (CRITICAL and HIGH severities, fixable CVEs only).
-- `SECURITY.md` — vulnerability disclosure policy and supply-chain verification
+- `SECURITY.md`: vulnerability disclosure policy and supply-chain verification
   instructions.
-- `LICENSE` — canonical MIT license text at repo root.
-- `.dockerignore` — excludes repo metadata from the build context.
-- README "Upgrade Notes" section — flags the `v2.0` non-root breaking change on the
+- `LICENSE`: canonical MIT license text at repo root.
+- `.dockerignore`: excludes repo metadata from the build context.
+- README "Upgrade Notes" section: flags the `v2.0` non-root breaking change on the
   horizon.
-- README "Verifying signatures" subsection — `cosign verify` invocation for the
+- README "Verifying signatures" subsection: `cosign verify` invocation for the
   published image.
 
 ### Changed
@@ -156,7 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/home/app/.kube` with `--user "$(id -u):0"` so host files remain readable by the
   container's non-root user.
 - README `## Run as non-root (optional)` section renamed to `## Run as root
-  (override)` and rewritten — non-root is now the default, the escape hatch is root.
+  (override)` and rewritten. Non-root is now the default, the escape hatch is root.
 - `scripts/smoke-test.sh` now fails hard on missing tools (no `|| true` fallbacks for core
   checks), asserts that `/etc/kube-version` matches `kubectl version --client`, and prefers
   `sh -c` over `bash -lc`.
@@ -169,11 +169,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `security-events: write`).
 - Workflow concurrency is keyed per-ref; in-progress runs are cancelled only for pull
   requests so branch/tag builds always complete.
-- CI: explicit `flavor: latest=false` in metadata-action — `:latest` now only bumps on
+- CI: explicit `flavor: latest=false` in metadata-action: `:latest` now only bumps on
   main pushes, not on semver tag pushes.
 - `unzip` is installed into the final image via an explicit multi-stage `COPY`/install
   path rather than side-effect-ing from the AWS CLI extraction step, but remains present
-  in the runtime toolchain. Retained **for backwards compatibility** with users of
+  in the runtime toolchain. Retained for backwards compatibility with users of
   `heyvaldemar/aws-kubectl:latest` who rely on `unzip` for ad-hoc zip extraction in CI
   pipelines; removal is deferred to a future major release after a deprecation notice.
 - Dockerfile base image pinned by digest (`ubuntu:24.04@sha256:…`) for reproducible,
@@ -196,7 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `https://github.com/heyvaldemar/aws-kubectl-docker/attestations`.
 
 ### Removed
-- `.github/FUNDING.yml` — sponsor discovery moves to heyvaldemar.com.
+- `.github/FUNDING.yml`: sponsor discovery moves to heyvaldemar.com.
 - Legacy README sections: first-person bio, paid-membership tier references, affiliate
   links (VPN/password-manager partner links, Udemy), `kit.co` gear shortcuts,
   cryptocurrency wallet addresses, Discord invite, octocat gif, and footer SVG.
@@ -210,8 +210,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration
 - Existing `v1.x` users: pin to `heyvaldemar/aws-kubectl:v1-maintenance` for 90 days
-  (through **2026-07-20**) of security updates while migrating. After that date the
-  `v1-maintenance` tag is frozen — no further rebuilds.
+  (through 2026-07-20) of security updates while migrating. After that date the
+  `v1-maintenance` tag is frozen: no further rebuilds.
 - Most CI workflows (no volume mount, one-shot `aws`/`kubectl` commands) will work
   unchanged.
 - Docker volume-mount workflows: add `--user "$(id -u):0"` and change the mount path

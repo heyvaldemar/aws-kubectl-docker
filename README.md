@@ -39,7 +39,7 @@
   - [Standardization reference](#standardization-reference)
   - [About the maintainer](#about-the-maintainer)
 
-This image streamlines work with Amazon Web Services (AWS) and Kubernetes by bundling **AWS CLI v2** (`aws`) and **kubectl** on **Ubuntu 24.04**. It also includes `jq`, `curl`, `unzip`, and `envsubst` (from `gettext-base`). Perfect for CI/CD steps, automation, and reproducible local scripting.
+This image bundles AWS CLI v2 (`aws`) and kubectl on Ubuntu 24.04. It also includes `jq`, `curl`, `unzip`, and `envsubst` (from `gettext-base`). Perfect for CI/CD steps, automation, and reproducible local scripting.
 
 🐳 Docker Hub: [heyvaldemar/aws-kubectl](https://hub.docker.com/r/heyvaldemar/aws-kubectl)
 
@@ -62,8 +62,8 @@ One image instead of three. Full supply-chain attestations. OpenShift-compatible
 
 ## Prerequisites
 
-- **Docker installed locally.** Quick check: `docker version`. The image ships AWS CLI v2 and `kubectl` inside, so you don't need either installed on your host. Multi-arch (amd64 + arm64) — works on Linux, macOS (Intel + Apple Silicon), Windows + WSL2.
-- **(Optional) AWS credentials in `~/.aws/`** if you want to run AWS commands. Create with `aws configure` from any machine that has aws-cli — or copy from an existing setup. The image mounts the dir read-only by convention.
+- **Docker installed locally.** Quick check: `docker version`. The image ships AWS CLI v2 and `kubectl` inside, so you don't need either installed on your host. Multi-arch (amd64 + arm64): works on Linux, macOS (Intel + Apple Silicon), Windows + WSL2.
+- **(Optional) AWS credentials in `~/.aws/`** if you want to run AWS commands. Create with `aws configure` from any machine that has aws-cli, or copy from an existing setup. The image mounts the dir read-only by convention.
 - **(Optional) `kubeconfig` in `~/.kube/`** if you want to run `kubectl` commands against an existing cluster. Create with `aws eks update-kubeconfig --name <cluster>` or your tool of choice.
 
 You can also run the container with no mounts for `aws --version`, `kubectl version --client`, or any tool that doesn't need cloud/cluster credentials.
@@ -90,14 +90,14 @@ docker run -it --user "$(id -u):0" \
 
 Runs as non-root by default (UID 10001). See [Mounting credentials](#mounting-credentials) for permission details.
 
-> 🚨 **Existing v1.x user and v2.0 broke your workflow?** Pin `heyvaldemar/aws-kubectl:v1-maintenance` for security updates through July 2026. [Migration details →](#breaking-changes-in-v20)
+> 🚨 Existing v1.x user and v2.0 broke your workflow? Pin `heyvaldemar/aws-kubectl:v1-maintenance` for security updates through July 2026. [Migration details →](#breaking-changes-in-v20)
 
 ## Pinning guidance
 
-For production use, pin to **immutable semver tags**:
+For production use, pin to immutable semver tags:
 
-- ✅ **Stable:** `heyvaldemar/aws-kubectl:2.0.0` — immutable on Docker Hub, never purged
-- ⚠️ **Fragile:** `heyvaldemar/aws-kubectl:sha-1dfda81` — short-SHA tags are deleted after 90 days
+- ✅ Stable: `heyvaldemar/aws-kubectl:2.0.0`, immutable on Docker Hub, never purged
+- ⚠️ Fragile: `heyvaldemar/aws-kubectl:sha-1dfda81`. Short-SHA tags are deleted after 90 days
 
 If you pin by manifest digest (recommended for maximum supply chain integrity), make sure the digest is also referenced by a semver tag. Otherwise the digest may become unpullable once short-SHA cleanup runs. To resolve a tag to its current digest:
 
@@ -118,15 +118,15 @@ docker buildx imagetools inspect heyvaldemar/aws-kubectl:2.0.0 \
 - **OCI labels** (`org.opencontainers.image.*`) on every published image.
 - **Resolved kubectl version** written to `/etc/kube-version` inside the image.
 
-> Default user is **non-root (UID 10001, GID 0)** as of v2.0. If you need root — e.g. to install additional `apt` packages at runtime — override with `--user 0:0`. See [Breaking Changes in v2.0](#breaking-changes-in-v20) for migration details.
+> Default user is non-root (UID 10001, GID 0) as of v2.0. If you need root (e.g. to install additional `apt` packages at runtime), override with `--user 0:0`. See [Breaking Changes in v2.0](#breaking-changes-in-v20) for migration details.
 
 ### Typical use cases
 
-- **GitHub Actions / GitLab CI pipelines** — one image instead of installing aws-cli + kubectl + jq separately in every job
-- **EKS cluster operations** — AWS auth via aws-cli, then kubectl against the cluster, in a single container
-- **OpenShift / restricted PodSecurityPolicy environments** — non-root default (UID 10001, GID 0) works out of the box
-- **Multi-cluster scripting** — consistent tooling across dev/staging/prod kubeconfigs
-- **Air-gapped or restricted networks** — pre-built image with checksum-verified binaries, no runtime `curl | bash`
+- **GitHub Actions / GitLab CI pipelines**: one image instead of installing aws-cli + kubectl + jq separately in every job
+- **EKS cluster operations**: AWS auth via aws-cli, then kubectl against the cluster, in a single container
+- **OpenShift / restricted PodSecurityPolicy environments**: non-root default (UID 10001, GID 0) works out of the box
+- **Multi-cluster scripting**: consistent tooling across dev/staging/prod kubeconfigs
+- **Air-gapped or restricted networks**: pre-built image with checksum-verified binaries, no runtime `curl | bash`
 
 ## Supply chain
 
@@ -137,9 +137,9 @@ docker buildx imagetools inspect heyvaldemar/aws-kubectl:2.0.0 \
 - CI lints the Dockerfile with `hadolint` and shell scripts with `shellcheck` before any build runs.
 - All third-party GitHub Actions are pinned to a commit SHA with a version comment.
 - Build arguments `VCS_REF` and `BUILD_DATE` are stamped into `org.opencontainers.image.revision` and `org.opencontainers.image.created`, and the resolved kubectl release is exposed via `io.heyvaldemar.kubectl.version` and `/etc/kube-version`.
-- Every published digest is **cosign-signed** via Sigstore keyless OIDC using the GitHub Actions identity for this repository.
-- **SBOM** (SPDX, generated by BuildKit) and **SLSA build provenance** (`provenance: mode=max`) are attached to every published image.
-- **GitHub native build provenance** is attested via `actions/attest-build-provenance` and stored in [GitHub Attestations](https://github.com/heyvaldemar/aws-kubectl-docker/attestations). Registry push is disabled because Docker Hub's OCI referrer credential handoff proved unreliable in early Phase 2 hotfix testing — see [CHANGELOG](CHANGELOG.md) `[2.0.0]` CI section for context.
+- Every published digest is cosign-signed via Sigstore keyless OIDC using the GitHub Actions identity for this repository.
+- **SBOM** (SPDX, generated by BuildKit) and SLSA build provenance (`provenance: mode=max`) are attached to every published image.
+- **GitHub native build provenance** is attested via `actions/attest-build-provenance` and stored in [GitHub Attestations](https://github.com/heyvaldemar/aws-kubectl-docker/attestations). Registry push is disabled because Docker Hub's OCI referrer credential handoff proved unreliable in early Phase 2 hotfix testing. See [CHANGELOG](CHANGELOG.md) `[2.0.0]` CI section for context.
 - **Trivy** scans the published image on every push; CRITICAL and HIGH fixable findings are uploaded as SARIF to the repository's GitHub Security tab.
 
 ### Verifying signatures
@@ -154,18 +154,18 @@ cosign verify heyvaldemar/aws-kubectl:latest \
 
 Tags fall into five categories:
 
-- **Exact semver** (`:2.0.0`, `:v2.0.0`) — immutable on Docker Hub; the digest under these tags never changes after first push. Recommended for production pins.
-- **Rolling semver** (`:2.0`, `:2`) — mutable; re-targets to the newest patch (and minor) within the major on each release. Kept forever.
-- **Floating channels** (`:latest`, `:edge`, `:v1-maintenance`) — updated on every main build; kept forever.
-- **Kubernetes-version pin** (`:kube-v1.36.0`) — generated only on semver releases. Tracks the kubectl release packaged into the image at the time of that release. Immutable on Docker Hub; kept forever.
-- **Short-SHA builds** (`:sha-<7char>`) — produced by CI for every commit to main. Immutable while live; retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
+- **Exact semver** (`:2.0.0`, `:v2.0.0`): immutable on Docker Hub; the digest under these tags never changes after first push. Recommended for production pins.
+- **Rolling semver** (`:2.0`, `:2`): mutable; re-targets to the newest patch (and minor) within the major on each release. Kept forever.
+- **Floating channels** (`:latest`, `:edge`, `:v1-maintenance`): updated on every main build; kept forever.
+- **Kubernetes-version pin** (`:kube-v1.36.0`): generated only on semver releases. Tracks the kubectl release packaged into the image at the time of that release. Immutable on Docker Hub; kept forever.
+- **Short-SHA builds** (`:sha-<7char>`): produced by CI for every commit to main. Immutable while live; retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
 
 Cosign signatures (`:sha256-<digest>.sig`) are managed by Sigstore and are not deleted.
 
-## Breaking Changes in v2.0
+## Breaking changes in v2.0
 
-Starting with **v2.0.0**, this image runs as a **non-root user (UID 10001, GID 0)**
-by default. This aligns with modern container security best practices and is
+Starting with v2.0.0, this image runs as a non-root user (UID 10001, GID 0)
+by default. This is how hardened container images are built today, and it is
 required for compatibility with OpenShift, restricted Kubernetes PodSecurityPolicy
 profiles, and enterprise security scanners.
 
@@ -205,7 +205,7 @@ maintenance track:
 docker pull heyvaldemar/aws-kubectl:v1-maintenance
 ```
 
-The `v1-maintenance` tag will receive security updates through **July 20, 2026**,
+The `v1-maintenance` tag will receive security updates through July 20, 2026,
 after which it will be frozen.
 
 ## Mounting credentials
@@ -215,9 +215,9 @@ after which it will be frozen.
 
 > The container's default user is UID 10001 with `HOME=/home/app`. Pass `--user "$(id -u):0"` when mounting host files so the container can read them.
 
-## Running the Container
+## Running the container
 
-Interactive shell with both configs (mount under `/home/app` — the non-root user's `HOME` — and match your host UID so the container can read the mounted files):
+Interactive shell with both configs (mount under `/home/app`, the non-root user's `HOME`, and match your host UID so the container can read the mounted files):
 
 ```bash
 docker run -it \
@@ -227,7 +227,7 @@ docker run -it \
   heyvaldemar/aws-kubectl bash
 ```
 
-If you pulled an **amd64-only** tag on an ARM/M-series Mac:
+If you pulled an amd64-only tag on an ARM/M-series Mac:
 
 ```bash
 docker run --platform linux/amd64 -it \
@@ -253,7 +253,7 @@ docker run --rm \
   heyvaldemar/aws-kubectl kubectl get nodes
 ```
 
-## Build Instructions
+## Build instructions
 
 The `Dockerfile` accepts the following build arguments:
 
@@ -278,7 +278,7 @@ docker build --build-arg KUBE_VERSION=v1.30.6 \
   -t aws-kubectl:local .
 ```
 
-If `KUBE_VERSION` is omitted, the build fetches the **latest stable** from `dl.k8s.io`.
+If `KUBE_VERSION` is omitted, the build fetches the latest stable from `dl.k8s.io`.
 
 ### Stamp revision and build date (recommended for release builds)
 
@@ -323,7 +323,7 @@ docker buildx imagetools inspect heyvaldemar/aws-kubectl:latest
 > Optional supply-chain flags (if you want SBOM/provenance):
 > `--sbom=true --provenance=true`
 
-## Local Build & Test (using the repo script)
+## Local build & test (using the repo script)
 
 This repo includes `scripts/smoke-test.sh` to validate the tools in the image.
 
@@ -398,10 +398,10 @@ docker run --rm --user "$(id -u):0" \
 
 </details>
 
-## Security Notes
+## Security notes
 
-- Runs as **non-root** by default (UID 10001, GID 0) as of v2.0.
-- `kubectl` binaries are **checksum-verified** during build.
+- Runs as non-root by default (UID 10001, GID 0) as of v2.0.
+- `kubectl` binaries are checksum-verified during build.
 - APT is minimal (`--no-install-recommends`) and lists are cleaned.
 - Pin `KUBE_VERSION` in CI for reproducibility.
 
