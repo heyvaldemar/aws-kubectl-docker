@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [2.1.0] - 2026-09-22
+
 ### Added
 - OpenSSF Scorecard analysis workflow (`.github/workflows/scorecard.yml`).
   Runs weekly on Tuesdays at 06:00 UTC (after the Monday rebuild and cleanup
@@ -220,5 +224,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runAsGroup: 0`, `fsGroup: 0`. See the README "Breaking Changes in v2.0" section
   for the full spec.
 
-[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/heyvaldemar/aws-kubectl-docker/releases/tag/v2.0.0
