@@ -176,7 +176,15 @@ jobs:
     needs: build
     if: github.event_name != 'pull_request'
     timeout-minutes: 10
-    continue-on-error: true
+    # NO continue-on-error, and the difference is not cosmetic. The action's
+    # exit code defaults to 0, so a finding never failed this job; the only
+    # thing the flag could hide was a scan that did not finish - a deadline, a
+    # registry refusing the pull. When the scan step fails the SARIF upload
+    # after it is skipped, so nothing reaches the Security tab either, and the
+    # run still said success. The same flag was removed from sixty templates
+    # after one of them hid exactly that; this pipeline was not a template, so
+    # that rollout never reached it. The image is already published by the time
+    # this runs, so a red here changes what is visible, not what is shipped.
     permissions:
       contents: read
       security-events: write

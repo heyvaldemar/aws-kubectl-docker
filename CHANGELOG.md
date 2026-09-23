@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Fixed
+
+- **A scan of the published image that cannot finish now fails the run.** The
+  Trivy job carried `continue-on-error: true`. Findings never failed it - the
+  action's exit code defaults to 0 - so the only thing the flag could hide was a
+  scan that did not complete, and then the SARIF upload is skipped too: no
+  result in the Security tab and a green run. Every scan here has completed so
+  far, which is why nothing showed; the fleet-wide fix for the same flag missed
+  this repository because it is not a compose template.
 
 ## [2.1.0] - 2026-09-22
 
