@@ -5,6 +5,7 @@
 [![Build Status](https://github.com/heyvaldemar/aws-kubectl-docker/actions/workflows/publish.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/aws-kubectl-docker/actions/workflows/publish.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/heyvaldemar/aws-kubectl-docker/badge)](https://scorecard.dev/viewer/?uri=github.com/heyvaldemar/aws-kubectl-docker)
 [![Cosign Verified](https://img.shields.io/badge/cosign-verified-brightgreen?logo=sigstore)](https://github.com/heyvaldemar/aws-kubectl-docker/attestations)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14920/badge)](https://www.bestpractices.dev/projects/14920)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Contents
