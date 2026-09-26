@@ -1,0 +1,6 @@
+# file	old	new	what the smoke test must notice
+"Dockerfile"	"USER 10001:0"	"USER 0:0"	"the image runs as root again"
+"Dockerfile"	"      jq \\\n      gettext-base"	"      gettext-base"	"jq left out of the image"
+"Dockerfile"	"      gettext-base \\\n"	""	"envsubst left out of the image"
+"Dockerfile"	"printf '%s\\n' \"$KUBE_VERSION\" > /build/kube-version"	"printf 'v0.0.0\\n' > /build/kube-version"	"the version marker no longer matches kubectl"
+"Dockerfile"	" \\\n && chown -R 10001:0 /home/app \\\n && chmod -R g=u /home/app"	""	"HOME left owned by root and unwritable for the runtime user"

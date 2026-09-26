@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The smoke test runs in CI, and nothing is published before it passes.** `scripts/smoke-test.sh` existed and ran only when someone ran it. A `test` job now builds the image from the commit, runs it, and gates the publish job; the smoke test also checks that the image runs as UID 10001 with a writable `HOME`, the promise of v2.0. `tests/plant-violations.py` rebuilds the image with each promise broken five ways and requires the smoke test to fail on every one.
+
 ### Fixed
 
 - **A scan of the published image that cannot finish now fails the run.** The
