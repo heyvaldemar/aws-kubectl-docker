@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [2.2.0] - 2026-09-26
+
 ### Added
 
 - **The smoke test runs in CI, and nothing is published before it passes.** `scripts/smoke-test.sh` existed and ran only when someone ran it. A `test` job now builds the image from the commit, runs it, and gates the publish job; the smoke test also checks that the image runs as UID 10001 with a writable `HOME`, the promise of v2.0. `tests/plant-violations.py` rebuilds the image with each promise broken five ways and requires the smoke test to fail on every one.
@@ -236,6 +240,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runAsGroup: 0`, `fsGroup: 0`. See the README "Breaking Changes in v2.0" section
   for the full spec.
 
-[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/heyvaldemar/aws-kubectl-docker/releases/tag/v2.0.0
