@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _(no unreleased changes yet)_
 
+## [2.2.1] - 2026-09-26
+
+### Fixed
+
+- **A release on a commit main has already published now completes.** The
+  v2.2.0 run pushed `2.2.0`, `2.2`, `2`, `v2.2.0` and `kube-v1.37.1`, then
+  Docker Hub refused `sha-83be903`: the push to main had published that tag
+  minutes earlier, and `sha-*` tags are immutable there. The run stopped before
+  signing, the build attestation and the Trivy scan, so **the 2.2.0 image
+  carries no cosign signature**. Use 2.2.1, the same Dockerfile published
+  completely. `sha-<commit>` now comes from branch pushes only, and
+  `kube-<version>`, immutable too, is added only when Docker Hub does not
+  already hold it: it names the first image that shipped that kubectl.
+
 ## [2.2.0] - 2026-09-26
 
 ### Added
@@ -240,7 +254,8 @@ _(no unreleased changes yet)_
   `runAsGroup: 0`, `fsGroup: 0`. See the README "Breaking Changes in v2.0" section
   for the full spec.
 
-[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.1...HEAD
+[2.2.1]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/heyvaldemar/aws-kubectl-docker/releases/tag/v2.0.0

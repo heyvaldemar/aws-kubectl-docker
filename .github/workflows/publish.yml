@@ -92,6 +92,23 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Resolved kubectl version: $version"
 
+      - name: Is this kubectl version's tag still free?
+        # kube-<version> is immutable on Docker Hub: it names the first image
+        # that shipped this kubectl and can never be moved. A release that keeps
+        # the same kubectl must leave it where it is, or the push is refused
+        # after the version tags are already out and nothing gets signed.
+        id: kubetag
+        env:
+          KUBE_VERSION: ${{ steps.kube.outputs.version }}
+        run: |
+          set -euo pipefail
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://hub.docker.com/v2/repositories/${IMAGE_NAME}/tags/kube-${KUBE_VERSION}")"
+          case "$code" in
+            200) echo "free=false" >> "$GITHUB_OUTPUT"; echo "kube-${KUBE_VERSION} already names an image; it stays where it is" ;;
+            404) echo "free=true" >> "$GITHUB_OUTPUT"; echo "kube-${KUBE_VERSION} is free" ;;
+            *) echo "::error::Docker Hub answered $code for kube-${KUBE_VERSION}; cannot tell whether the tag is free"; exit 1 ;;
+          esac
+
       - name: Compute build metadata
         id: meta-build
         run: |
@@ -119,6 +136,9 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
+          # sha-<commit> comes from the branch push only. Docker Hub keeps it
+          # immutable, and a release tag on a commit main has already published
+          # would rebuild and try to move it, which is how v2.2.0 failed.
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=edge,enable={{is_default_branch}}
@@ -126,8 +146,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha,prefix=sha-,format=short,enable=${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
-            type=raw,value=kube-${{ steps.kube.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=sha,prefix=sha-,format=short,enable=${{ github.ref_type == 'branch' }}
+            type=raw,value=kube-${{ steps.kube.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') && steps.kubetag.outputs.free == 'true' }}
           labels: |
             org.opencontainers.image.title=aws-kubectl
             org.opencontainers.image.description=Ubuntu 24.04 image bundling AWS CLI v2, kubectl, jq, envsubst, curl and ca-certificates for CI/CD and local tooling.
