@@ -41,10 +41,36 @@ jobs:
           shopt -s nullglob globstar
           shellcheck scripts/**/*.sh
 
+  test:
+    name: Test the image before it is published, and show the test each violation
+    runs-on: ubuntu-latest
+    needs: lint
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the image for this runner
+        run: docker build -t aws-kubectl:local .
+
+      # Every advertised tool answers, the baked-in kubectl version matches
+      # the binary, and the image runs as UID 10001 with a writable HOME.
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh aws-kubectl:local
+
+      # A test that cannot fail is not a test: each promise is broken in a
+      # copy of the Dockerfile, the image rebuilt, and the run fails if the
+      # smoke test stays green.
+      - name: The smoke test, shown each violation it exists for
+        run: python3 tests/plant-violations.py -- bash -c 'docker build -q -t aws-kubectl:plant . >/dev/null && ./scripts/smoke-test.sh aws-kubectl:plant'
+
   build:
     name: Build and Publish Docker Image
     runs-on: ubuntu-latest
-    needs: lint
+    # Nothing is published that the test has not passed.
+    needs: [lint, test]
     timeout-minutes: 30
     permissions:
       contents: read

@@ -50,6 +50,21 @@ if [ "$FILE_VERSION" != "$CLIENT_VERSION" ]; then
 fi
 echo "OK: /etc/kube-version matches kubectl client version"
 
+# v2.0 moved the image off root: UID 10001, GID 0, HOME=/home/app and
+# writable, so it runs under restricted pod security and OpenShift's
+# arbitrary UIDs. A rebuild that lost the USER line would pass every check
+# above and quietly run as root again.
+say "Verifying the image runs as the unprivileged user it promises"
+RUN_AS="$(docker run --rm "$IMAGE" sh -c 'echo "$(id -u):$(id -g) $HOME"')"
+echo "runs as: $RUN_AS"
+if [ "$RUN_AS" != "10001:0 /home/app" ]; then
+  echo "FAIL: expected 10001:0 with HOME=/home/app, got '$RUN_AS'." >&2
+  exit 1
+fi
+docker run --rm "$IMAGE" sh -c 'touch "$HOME/.probe" && rm "$HOME/.probe"' \
+  || { echo "FAIL: HOME is not writable by the runtime user." >&2; exit 1; }
+echo "OK: runs as 10001:0 with a writable HOME"
+
 # Optional real-world checks — these require local credentials and are
 # expected to be best-effort, so we still guard them with `|| true`.
 # As of v2.0 the image runs as UID 10001 with HOME=/home/app. Mount host config

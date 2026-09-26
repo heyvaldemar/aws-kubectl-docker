@@ -326,7 +326,7 @@ docker buildx imagetools inspect heyvaldemar/aws-kubectl:latest
 
 ## Local build & test (using the repo script)
 
-This repo includes `scripts/smoke-test.sh` to validate the tools in the image.
+This repo includes `scripts/smoke-test.sh` to validate the tools in the image. CI runs it on every push and pull request against an image built from the commit, before anything is published: the publish job waits for it. It also checks that the image runs as UID 10001 with a writable `HOME`, and [`tests/plant-violations.py`](tests/plant-violations.py) proves the test can fail by rebuilding the image with each promise broken, five ways listed in [`tests/plants.tsv`](tests/plants.tsv): running as root, jq or envsubst left out, the version marker not matching kubectl, and `HOME` left unwritable.
 
 1. **Build locally**
 
@@ -347,6 +347,7 @@ The script checks:
 - OS/arch
 - Versions: AWS CLI, kubectl (client), jq, envsubst, curl, unzip
 - That `/etc/kube-version` matches `kubectl version --client`
+- That the image runs as UID 10001, GID 0, with a writable `HOME=/home/app`
 - Binary locations & CA bundle
 - HTTPS reachability (header-only)
 - (Optional) AWS STS + `kubectl` cluster calls if you mount `~/.aws` / `~/.kube`
