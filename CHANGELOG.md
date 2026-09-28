@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Fixed
+
+- **The weekly build and a manual dispatch no longer repeat the v2.2.0
+  failure.** 2.2.1 limited `sha-<commit>` to branch runs, and the weekly
+  schedule and a manual dispatch are branch runs too: each rebuilds a commit
+  main has already published, so the next one would have pushed `latest` and
+  `edge`, been refused on the existing `sha-<commit>`, and stopped before
+  signing, leaving `latest` on an unsigned image. `sha-<commit>` is now added
+  only when Docker Hub does not already hold it, the same check
+  `kube-<version>` has.
 
 ## [2.2.1] - 2026-09-26
 
