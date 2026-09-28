@@ -109,6 +109,18 @@ jobs:
             *) echo "::error::Docker Hub answered $code for kube-${KUBE_VERSION}; cannot tell whether the tag is free"; exit 1 ;;
           esac
 
+      - name: Is sha-<commit> still free on Docker Hub
+        id: shatag
+        run: |
+          set -euo pipefail
+          tag="sha-${GITHUB_SHA::7}"
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://hub.docker.com/v2/repositories/${IMAGE_NAME}/tags/${tag}")"
+          case "$code" in
+            200) echo "free=false" >> "$GITHUB_OUTPUT"; echo "${tag} already names an image; this build does not try to move it" ;;
+            404) echo "free=true" >> "$GITHUB_OUTPUT"; echo "${tag} is free" ;;
+            *) echo "::error::Docker Hub answered $code for ${tag}; cannot tell whether the tag is free"; exit 1 ;;
+          esac
+
       - name: Compute build metadata
         id: meta-build
         run: |
@@ -136,9 +148,11 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
-          # sha-<commit> comes from the branch push only. Docker Hub keeps it
-          # immutable, and a release tag on a commit main has already published
-          # would rebuild and try to move it, which is how v2.2.0 failed.
+          # sha-<commit> is emitted only while Docker Hub does not hold it. The tag
+          # is immutable there, and any run that rebuilds a commit already
+          # published (a release tag, the weekly schedule, a manual dispatch)
+          # would try to move it, fail after pushing the other tags, and skip
+          # signing. That is how v2.2.0 shipped unsigned.
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=edge,enable={{is_default_branch}}
@@ -146,7 +160,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha,prefix=sha-,format=short,enable=${{ github.ref_type == 'branch' }}
+            type=sha,prefix=sha-,format=short,enable=${{ github.ref_type == 'branch' && steps.shatag.outputs.free == 'true' }}
             type=raw,value=kube-${{ steps.kube.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') && steps.kubetag.outputs.free == 'true' }}
           labels: |
             org.opencontainers.image.title=aws-kubectl
