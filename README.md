@@ -55,7 +55,7 @@ This image bundles AWS CLI v2 (`aws`) and kubectl on Ubuntu 24.04. It also inclu
 | Cosign signatures | ✅ | ✅ | ❌ | ❌ |
 | SBOM (SPDX) | ✅ | ❌ | ❌ | ❌ |
 | SLSA build provenance | ✅ | ❌ | ❌ | ❌ |
-| OpenSSF Scorecard | 7.8/10 | N/A | N/A | N/A |
+| OpenSSF Scorecard | 8.1/10 (as of 2026-10-06) | N/A | N/A | N/A |
 | Non-root default (UID 10001) | ✅ (v2.0+) | ❌ | ❌ | depends |
 | Weekly base rebuild | ✅ | ✅ | ✅ | manual |
 
