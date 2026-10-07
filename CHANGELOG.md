@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The documentation now matches the image.** Since #40 (2026-09-02) the
+  base is Ubuntu 26.04; the README, the OCI description label and the Docker
+  Hub short description still said 24.04. 2.0.0 runs 24.04; 2.1.0 and later
+  run 26.04.
+- **The README no longer says Dependabot refreshes the base image.**
+  Dependabot's docker updates were switched off in #57 (2026-09-06); the
+  pinned digest moves only by pull request. The weekly rebuild refreshes the
+  added packages, kubectl and the AWS CLI, not the base layers.
+- **`v1-maintenance` end of support is stated as it happened.** Support ended
+  on 2026-07-20, and the tag's last rebuild was on 2026-04-22, so the promised
+  security rebuilds did not ship. README and SECURITY.md now say so.
+- **The unsigned tags are labelled.** `2.2.0`, `v2.2.0` and `kube-v1.37.1`
+  share one unsigned digest; the README's stable pin example is now 2.2.1.
 - **The weekly build and a manual dispatch no longer repeat the v2.2.0
   failure.** 2.2.1 limited `sha-<commit>` to branch runs, and the weekly
   schedule and a manual dispatch are branch runs too: each rebuilds a commit
