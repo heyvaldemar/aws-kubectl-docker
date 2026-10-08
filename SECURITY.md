@@ -5,10 +5,10 @@
 | Version                                                        | Status             |
 |----------------------------------------------------------------|--------------------|
 | `2.x` (current, `latest`, newest `kube-<X.Y.Z>`, non-root)     | :white_check_mark: |
-| `v1-maintenance` tag (pre-v2.0, root default, security-only)   | :white_check_mark: until **2026-07-20** |
+| `v1-maintenance` tag (pre-v2.0, root default, frozen)           | :x: end of support **2026-07-20**; last rebuilt 2026-04-22 |
 | Older `1.x` without the `v1-maintenance` tag                   | :x:                |
 
-`v2.0.0` (2026-04-21) changed the default runtime user to non-root (UID 10001, GID 0). Users on `1.x` who need time to migrate can pin `heyvaldemar/aws-kubectl:v1-maintenance` for security updates through 2026-07-20 (90 days after the v2.0 release). After that date the `v1-maintenance` tag will be frozen: no further rebuilds. See the README "Breaking Changes in v2.0" section for the migration guide.
+`v2.0.0` (2026-04-21) changed the default runtime user to non-root (UID 10001, GID 0). The `v1-maintenance` tag was offered to `1.x` users for security updates through 2026-07-20 (90 days after the v2.0 release). Its last rebuild was on 2026-04-22, so no security updates shipped in that window, and the tag is now frozen. Migrate to `2.x`. See the README "Breaking Changes in v2.0" section for the migration guide.
 
 ## Reporting a vulnerability
 

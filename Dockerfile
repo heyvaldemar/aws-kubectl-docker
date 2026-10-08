@@ -5,7 +5,7 @@
 #   Downloads, verifies, and unpacks AWS CLI v2 and kubectl.
 #   Build-only tooling (unzip) lives here and never enters the final image.
 # ──────────────────────────────────────────────────────────────────────────────
-# Digest pinned; Dependabot docker ecosystem will bump this weekly.
+# Digest pinned. It moves only when a pull request changes it; Dependabot docker updates are off since 2026-09-06.
 FROM ubuntu:26.04@sha256:f3d28607ddd78734bb7f71f117f3c6706c666b8b76cbff7c9ff6e5718d46ff64 AS builder
 
 ARG TARGETARCH
@@ -90,7 +90,7 @@ RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws \
  && ln -s /usr/local/aws-cli/v2/current/bin/aws_completer /usr/local/bin/aws_completer
 
 LABEL org.opencontainers.image.title="aws-kubectl" \
-      org.opencontainers.image.description="Ubuntu 24.04 image bundling AWS CLI v2, kubectl, jq, envsubst, curl and ca-certificates for CI/CD and local tooling." \
+      org.opencontainers.image.description="Ubuntu 26.04 image bundling AWS CLI v2, kubectl, jq, envsubst, curl and ca-certificates for CI/CD and local tooling." \
       org.opencontainers.image.authors="Vladimir Mikhalev <v@valdemar.ai>" \
       org.opencontainers.image.vendor="heyvaldemar" \
       org.opencontainers.image.source="https://github.com/heyvaldemar/aws-kubectl-docker" \
