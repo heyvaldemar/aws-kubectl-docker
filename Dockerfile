@@ -2,7 +2,7 @@
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 1: builder
-#   Downloads, verifies, and unpacks AWS CLI v2 and kubectl.
+#   Downloads AWS CLI v2 and kubectl, verifies kubectl against its sha256, unpacks both.
 #   Build-only tooling (unzip) lives here and never enters the final image.
 # ──────────────────────────────────────────────────────────────────────────────
 # Digest pinned. It moves only when a pull request changes it; Dependabot docker updates are off since 2026-09-06.

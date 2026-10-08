@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The pinning claim names its one exception.** The README said every
+  third-party Action is pinned to a commit SHA; the SLSA generator in
+  `release-assets.yml` is pinned by tag, as it must be, and Scorecard counts
+  it. The workflow comment that said Scorecard does not count it is corrected
+  too.
+- **"checksum-verified" now says what is verified.** Only kubectl is checked
+  against its sha256; the AWS CLI installer is downloaded over TLS without a
+  signature check. README, the Docker Hub short description and the Dockerfile
+  comment say so.
+- **PodSecurityPolicy is gone from the docs.** It was removed in Kubernetes
+  1.25; the README now refers to the Pod Security Standards `restricted`
+  profile and Pod Security Admission, and says which part of that profile the
+  image meets (`runAsNonRoot`) and which the pod spec sets.
 - **The documentation now matches the image.** Since #40 (2026-09-02) the
   base is Ubuntu 26.04; the README, the OCI description label and the Docker
   Hub short description still said 24.04. 2.0.0 runs 24.04; 2.1.0 and later
