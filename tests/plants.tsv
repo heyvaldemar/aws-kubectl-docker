@@ -4,3 +4,6 @@
 "Dockerfile"	"      gettext-base \\\n"	""	"envsubst left out of the image"
 "Dockerfile"	"printf '%s\\n' \"$KUBE_VERSION\" > /build/kube-version"	"printf 'v0.0.0\\n' > /build/kube-version"	"the version marker no longer matches kubectl"
 "Dockerfile"	" \\\n && chown -R 10001:0 /home/app \\\n && chmod -R g=u /home/app"	""	"HOME left owned by root and unwritable for the runtime user"
+"Dockerfile"	"ARG AWS_CLI_KEY_FPR=FB5DB77FD5C118B80511ADA8A6310ACC4672475C"	"ARG AWS_CLI_KEY_FPR=0000000000000000000000000000000000000000"	"an AWS CLI archive signed by any other key is accepted"
+"Dockerfile"	"USER 10001:0"	"RUN rm -f /usr/bin/tar\nUSER 10001:0"	"a tool users call but the image never advertised (tar) disappears"
+"Dockerfile"	"WORKDIR /home/app"	"WORKDIR /tmp"	"the working directory pipelines rely on moves"

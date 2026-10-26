@@ -1,0 +1,3 @@
+# Executables the published image had and a new build may drop on purpose.
+# One name per line, then the reason; each removal is also named in the
+# changelog of the release that ships it. Empty: nothing has been removed.

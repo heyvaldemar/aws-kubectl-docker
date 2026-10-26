@@ -43,19 +43,61 @@ jobs:
           shopt -s nullglob globstar
           shellcheck scripts/**/*.sh
 
-  test:
-    name: Test the image before it is published, and show the test each violation
+  versions:
+    name: Resolve the kubectl lines to build
     runs-on: ubuntu-latest
-    needs: lint
-    timeout-minutes: 45
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      lines: ${{ steps.lines.outputs.lines }}
+    steps:
+      # THE THREE NEWEST KUBERNETES MINORS, the window upstream supports. Each
+      # gets a moving tag, kube-<minor>, rebuilt with this image every week, so
+      # a pipeline can follow its cluster's minor and still receive security
+      # rebuilds; latest keeps following the newest minor. kubectl is supported
+      # within one minor of the API server, so a cluster on 1.35 is not served
+      # well by a latest that jumped to 1.37.
+      - name: The newest three minors and their current patch releases
+        id: lines
+        run: |
+          set -euo pipefail
+          newest="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+          minor="${newest#v}"; minor="${minor%.*}"
+          major="${minor%%.*}"; m="${minor#*.}"
+          lines='[]'
+          for i in 0 1 2; do
+            line="${major}.$((m - i))"
+            version="$(curl -fsSL "https://dl.k8s.io/release/stable-${line}.txt")"
+            # Strictly vMAJOR.MINOR.PATCH on this line: the value reaches build
+            # arguments and tag names, so nothing else is let through.
+            if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || [ "${version%.*}" != "v${line}" ]; then
+              echo "::error::stable-${line}.txt answered something that is not a v${line}.N release"; exit 1
+            fi
+            lines="$(jq -c --arg minor "$line" --arg version "$version" --argjson newest "$([ "$i" = 0 ] && echo true || echo false)" \
+              '. + [{minor: $minor, version: $version, newest: $newest}]' <<<"$lines")"
+          done
+          echo "lines=$lines" >> "$GITHUB_OUTPUT"
+          echo "$lines" | jq .
+
+  test:
+    name: Test kubectl ${{ matrix.line.minor }} before it is published
+    runs-on: ubuntu-latest
+    needs: [lint, versions]
+    timeout-minutes: 60
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        line: ${{ fromJSON(needs.versions.outputs.lines) }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build the image for this runner
-        run: docker build -t aws-kubectl:local .
+        env:
+          KUBE_VERSION: ${{ matrix.line.version }}
+        run: docker build --build-arg "KUBE_VERSION=${KUBE_VERSION}" -t aws-kubectl:local .
 
       # Every advertised tool answers, the baked-in kubectl version matches
       # the binary, and the image runs as UID 10001 with a writable HOME.
@@ -65,36 +107,70 @@ jobs:
       # A test that cannot fail is not a test: each promise is broken in a
       # copy of the Dockerfile, the image rebuilt, and the run fails if the
       # smoke test stays green.
-      - name: The smoke test, shown each violation it exists for
-        run: python3 tests/plant-violations.py -- bash -c 'docker build -q -t aws-kubectl:plant . >/dev/null && ./scripts/smoke-test.sh aws-kubectl:plant'
+      # The published image is the baseline: every executable on its PATH,
+      # its user, HOME, working directory, entrypoint and command, the AWS CLI
+      # major, and kubectl no older (and on its own minor, for kube-<minor>).
+      # A build that breaks any of it is not published.
+      - name: The contract with what is already published
+        env:
+          NEWEST: ${{ matrix.line.newest }}
+          MINOR: ${{ matrix.line.minor }}
+        run: |
+          if [ "$NEWEST" = true ]; then
+            ./scripts/contract-test.sh aws-kubectl:local heyvaldemar/aws-kubectl:latest
+          else
+            ./scripts/contract-test.sh aws-kubectl:local "heyvaldemar/aws-kubectl:kube-${MINOR}" "$MINOR"
+          fi
+
+      - name: The smoke and contract tests, shown each violation they exist for
+        if: matrix.line.newest
+        run: python3 tests/plant-violations.py -- bash -c 'docker build -q -t aws-kubectl:plant . >/dev/null && ./scripts/smoke-test.sh aws-kubectl:plant >/dev/null 2>&1 && ./scripts/contract-test.sh aws-kubectl:plant heyvaldemar/aws-kubectl:latest'
+
+      # The AWS CLI team's key expires 2027-07-01. Thirty days before, this
+      # goes red, so the refresh is a pull request and not a broken build.
+      - name: The AWS CLI signing key is not about to expire
+        run: |
+          set -euo pipefail
+          GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
+          gpg --batch --quiet --import aws-cli-public-key.asc
+          expires="$(gpg --batch --with-colons --list-keys FB5DB77FD5C118B80511ADA8A6310ACC4672475C | awk -F: '/^pub/{print $7; exit}')"
+          left=$(( (expires - $(date +%s)) / 86400 ))
+          echo "the AWS CLI signing key expires in ${left} days"
+          if [ "$left" -lt 30 ]; then
+            echo "::error::the AWS CLI signing key expires in ${left} days: refresh aws-cli-public-key.asc from the AWS CLI install guide"
+            exit 1
+          fi
 
   build:
-    name: Build and Publish Docker Image
+    name: Build and publish kubectl ${{ matrix.line.minor }}
     runs-on: ubuntu-latest
     # Nothing is published that the test has not passed.
-    needs: [lint, test]
+    needs: [lint, versions, test]
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        line: ${{ fromJSON(needs.versions.outputs.lines) }}
     permissions:
       contents: read
       packages: write
       id-token: write
       attestations: write
       security-events: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Resolve kubectl version
+      - name: The kubectl this line builds
         id: kube
+        env:
+          VERSION: ${{ matrix.line.version }}
         run: |
-          set -euo pipefail
-          version="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Resolved kubectl version: $version"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "kubectl $VERSION"
 
       - name: Is this kubectl version's tag still free?
+        if: matrix.line.newest
         # kube-<version> is immutable on Docker Hub: it names the first image
         # that shipped this kubectl and can never be moved. A release that keeps
         # the same kubectl must leave it where it is, or the push is refused
@@ -112,6 +188,7 @@ jobs:
           esac
 
       - name: Is sha-<commit> still free on Docker Hub
+        if: matrix.line.newest
         id: shatag
         run: |
           set -euo pipefail
@@ -155,15 +232,19 @@ jobs:
           # published (a release tag, the weekly schedule, a manual dispatch)
           # would try to move it, fail after pushing the other tags, and skip
           # signing. That is how v2.2.0 shipped unsigned.
+          # Only the newest line moves latest, edge, the release tags and the
+          # immutable per-commit and per-version tags; every line moves its own
+          # kube-<minor>, which is not immutable on Docker Hub.
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=edge,enable={{is_default_branch}}
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-,format=short,enable=${{ github.ref_type == 'branch' && steps.shatag.outputs.free == 'true' }}
-            type=raw,value=kube-${{ steps.kube.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/') && steps.kubetag.outputs.free == 'true' }}
+            type=raw,value=latest,enable=${{ matrix.line.newest && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=raw,value=edge,enable=${{ matrix.line.newest && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=ref,event=tag,enable=${{ matrix.line.newest }}
+            type=semver,pattern={{version}},enable=${{ matrix.line.newest }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ matrix.line.newest }}
+            type=semver,pattern={{major}},enable=${{ matrix.line.newest }}
+            type=sha,prefix=sha-,format=short,enable=${{ matrix.line.newest && github.ref_type == 'branch' && steps.shatag.outputs.free == 'true' }}
+            type=raw,value=kube-${{ steps.kube.outputs.version }},enable=${{ matrix.line.newest && startsWith(github.ref, 'refs/tags/') && steps.kubetag.outputs.free == 'true' }}
+            type=raw,value=kube-${{ matrix.line.minor }}
           labels: |
             org.opencontainers.image.title=aws-kubectl
             org.opencontainers.image.description=Ubuntu 26.04 image bundling AWS CLI v2, kubectl, jq, envsubst, curl and ca-certificates for CI/CD and local tooling.
@@ -187,8 +268,8 @@ jobs:
             KUBE_VERSION=${{ steps.kube.outputs.version }}
             VCS_REF=${{ steps.meta-build.outputs.vcs_ref }}
             BUILD_DATE=${{ steps.meta-build.outputs.build_date }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=kube-${{ matrix.line.minor }}
+          cache-to: type=gha,mode=max,scope=kube-${{ matrix.line.minor }}
           sbom: true
           provenance: mode=max
 
@@ -233,9 +314,13 @@ jobs:
           echo "All tags signed successfully"
 
   scan-trivy:
-    name: Scan published image with Trivy
+    name: Scan published kubectl ${{ matrix.line.minor }} with Trivy
     runs-on: ubuntu-latest
-    needs: build
+    needs: [versions, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        line: ${{ fromJSON(needs.versions.outputs.lines) }}
     if: github.event_name != 'pull_request'
     timeout-minutes: 10
     # NO continue-on-error, and the difference is not cosmetic. The action's
@@ -254,10 +339,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: The digest kube-${{ matrix.line.minor }} names now
+        id: digest
+        env:
+          MINOR: ${{ matrix.line.minor }}
+        run: |
+          set -euo pipefail
+          digest="$(docker buildx imagetools inspect "${IMAGE_NAME}:kube-${MINOR}" --format '{{json .Manifest}}' | jq -r .digest)"
+          case "$digest" in sha256:*) ;; *) echo "::error::could not resolve ${IMAGE_NAME}:kube-${MINOR}"; exit 1 ;; esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
       - name: Trivy scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.IMAGE_NAME }}@${{ needs.build.outputs.digest }}
+          image-ref: ${{ env.IMAGE_NAME }}@${{ steps.digest.outputs.digest }}
           format: sarif
           output: trivy.sarif
           severity: CRITICAL,HIGH
@@ -267,7 +362,29 @@ jobs:
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: trivy.sarif
-          category: trivy
+          # The newest line keeps the category the single image always used, so
+          # its open alerts carry on; the older lines get their own.
+          category: ${{ matrix.line.newest && 'trivy' || format('trivy-kube-{0}', matrix.line.minor) }}
+
+  # The ruleset requires checks by names that stay put while Kubernetes minors
+  # enter and leave the lines. The matrix jobs are named by minor, so this one
+  # stands for all of them, and fails if any line failed or was skipped.
+  published:
+    name: Build and Publish Docker Image
+    runs-on: ubuntu-latest
+    needs: [lint, versions, test, build]
+    if: always()
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Every line was tested and built
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "lint, versions, test, build: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = success ] || { echo "::error::a job this one stands for ended '$r'"; exit 1; }
+          done
 
   dockerhub-description:
     name: Sync Docker Hub description
@@ -286,5 +403,5 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAME }}
-          short-description: "AWS CLI v2 + kubectl on Ubuntu 26.04. Multi-arch (amd64/arm64), kubectl checksum-verified."
+          short-description: "AWS CLI v2 + kubectl on Ubuntu 26.04, amd64/arm64. Signed; AWS CLI and kubectl verified at build."
           readme-filepath: ./README.md

@@ -95,9 +95,10 @@ Runs as non-root by default (UID 10001). See [Mounting credentials](#mounting-cr
 
 ## Pinning guidance
 
-For production use, pin to immutable semver tags:
+For production use, pin to an immutable semver tag, or follow your cluster's Kubernetes minor:
 
-- ✅ Stable: `heyvaldemar/aws-kubectl:2.2.1`, immutable on Docker Hub, never purged, cosign-signed
+- ✅ Stable: `heyvaldemar/aws-kubectl:2.3.0`, immutable on Docker Hub, never purged, cosign-signed
+- ✅ Follow your cluster: `heyvaldemar/aws-kubectl:kube-1.37` (also `kube-1.36`, `kube-1.35`). Rebuilt every week with the current patch release and security updates, and never moved to another kubectl minor. `latest` follows the newest minor, so a pipeline on `latest` gets kubectl 1.38 the week it ships; kubectl is supported within one minor of the API server, which a cluster on 1.35 would no longer be.
 - ⛔ Unsigned: `2.2.0`, `v2.2.0` and `kube-v1.37.1` (one digest) were published without a cosign signature and, being immutable, stay unsigned. Use `2.2.1` instead; see the [CHANGELOG](CHANGELOG.md).
 - ⚠️ Fragile: `heyvaldemar/aws-kubectl:sha-1dfda81`. Short-SHA tags are deleted after 90 days
 
@@ -128,13 +129,15 @@ docker buildx imagetools inspect heyvaldemar/aws-kubectl:2.0.0 \
 - **EKS cluster operations**: AWS auth via aws-cli, then kubectl against the cluster, in a single container
 - **OpenShift / Pod Security Admission `restricted` namespaces**: the non-root default (UID 10001, GID 0) meets `runAsNonRoot`; the pod spec sets the rest of the `restricted` profile (`allowPrivilegeEscalation: false`, drop `ALL` capabilities, `RuntimeDefault` seccomp)
 - **Multi-cluster scripting**: consistent tooling across dev/staging/prod kubeconfigs
-- **Air-gapped or restricted networks**: pre-built image, no runtime `curl | bash`. kubectl is checksum-verified at build time; the AWS CLI installer is downloaded from AWS over TLS without a signature check
+- **Air-gapped or restricted networks**: pre-built image, no runtime `curl | bash`. the AWS CLI archive is verified against the AWS CLI team's PGP signature and kubectl against its sha256 at build time
 
 ## Supply chain
 
 - Base image pinned by `sha256` digest (`ubuntu:26.04@sha256:…`). The digest moves only when a pull request changes it. Dependabot's `docker` updates were switched off on 2026-09-06, so the base is bumped by hand; the pinned digest dates from 2026-09-02.
 - Multi-stage `Dockerfile` keeps build-only intermediate artefacts (the downloaded AWS CLI archive, extracted tree, kubectl tarball, and checksum file) out of the published image.
 - `kubectl` binaries are verified against the upstream `sha256` checksum published at `dl.k8s.io` during build.
+- The AWS CLI archive is verified against the AWS CLI team's PGP signature, by fingerprint `FB5D B77F D5C1 18B8 0511 ADA8 A631 0ACC 4672 475C`, with the key kept in this repository as AWS publishes it in its [install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html). An archive signed by any other key fails the build. The key expires on 2027-07-01; CI goes red 30 days before, so the refresh is a pull request.
+- **Nothing a pipeline relied on yesterday disappears today.** Before anything is published, every build is compared with the image already published under the same tag: every executable on its `PATH` (508 today, advertised or not), the user, `HOME`, working directory, entrypoint, command and `PATH`, the AWS CLI major, and kubectl no older and, on a `kube-<minor>` tag, on that minor. A removal has to be named in `tests/contract-removed.tsv` and the changelog. The test is shown each break it exists for (`tests/plants.tsv`).
 - Weekly scheduled rebuilds (`cron: "0 6 * * 1"`) reinstall the packages the image adds on top of the base from the current Ubuntu archive, and fetch the current stable kubectl and AWS CLI. They do not move the pinned base layers; that takes a digest bump.
 - CI lints the Dockerfile with `hadolint` and shell scripts with `shellcheck` before any build runs.
 - Every third-party GitHub Action is pinned to a commit SHA with a version comment, with one exception: `release-assets.yml` calls the SLSA generator's reusable workflow by tag (`@v2.1.0`), because the generator verifies its own reference at run time and refuses a SHA. OpenSSF Scorecard counts that line against Pinned-Dependencies.
@@ -154,11 +157,12 @@ cosign verify heyvaldemar/aws-kubectl:latest \
 
 ## Tag management
 
-Tags fall into five categories:
+Tags fall into six categories:
 
 - **Exact semver** (`:2.0.0`, `:v2.0.0`): immutable on Docker Hub; the digest under these tags never changes after first push. Recommended for production pins.
 - **Rolling semver** (`:2.0`, `:2`): mutable; re-targets to the newest patch (and minor) within the major on each release. Kept forever.
 - **Floating channels** (`:latest`, `:edge`): updated on every main build and by the weekly rebuild; kept forever. `:v1-maintenance` is frozen at its 2026-04-22 build (end of support 2026-07-20).
+- **Kubernetes minor lines** (`:kube-1.37`, `:kube-1.36`, `:kube-1.35`): mutable; the three newest Kubernetes minors, the window upstream supports, each rebuilt every week and on every main build with its current patch release. A line stops moving when it falls out of the three. Kept forever.
 - **Kubernetes-version pin** (`:kube-v1.36.0`): generated only on semver releases. Tracks the kubectl release packaged into the image at the time of that release. Immutable on Docker Hub; kept forever. `kube-v1.37.1` is unsigned (see Pinning guidance).
 - **Short-SHA builds** (`:sha-<7char>`): produced by CI for every commit to main. Immutable while live; retained for 90 days, then automatically deleted by the `Docker Hub Tag Cleanup` workflow.
 
