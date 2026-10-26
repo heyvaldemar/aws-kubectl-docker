@@ -2,8 +2,9 @@
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Stage 1: builder
-#   Downloads AWS CLI v2 and kubectl, verifies kubectl against its sha256, unpacks both.
-#   Build-only tooling (unzip) lives here and never enters the final image.
+#   Downloads AWS CLI v2 and kubectl, verifies the AWS CLI archive against the
+#   AWS CLI team's PGP signature and kubectl against its sha256, unpacks both.
+#   Build-only tooling (unzip, gnupg) lives here and never enters the final image.
 # ──────────────────────────────────────────────────────────────────────────────
 # Digest pinned. It moves only when a pull request changes it; Dependabot docker updates are off since 2026-09-06.
 FROM ubuntu:26.04@sha256:f3d28607ddd78734bb7f71f117f3c6706c666b8b76cbff7c9ff6e5718d46ff64 AS builder
@@ -19,10 +20,21 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
+      gnupg \
       unzip \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
+
+# THE AWS CLI ARCHIVE IS VERIFIED, NOT TRUSTED. AWS signs every archive with the
+# AWS CLI team's PGP key and publishes the key in its install guide
+# (https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+# The key is kept in this repository; the build requires a valid signature by
+# exactly this fingerprint, so a key swapped in the file fails too. The key
+# expires on 2027-07-01; the publish workflow goes red 30 days before that, so
+# the refresh is a pull request, not a broken Monday build.
+ARG AWS_CLI_KEY_FPR=FB5DB77FD5C118B80511ADA8A6310ACC4672475C
+COPY aws-cli-public-key.asc /build/aws-cli-public-key.asc
 
 # Resolve architecture (fallback if TARGETARCH not provided).
 # KARCH is for kubectl (amd64|arm64); AWS_ARCH is for AWS CLI (x86_64|aarch64).
@@ -35,6 +47,12 @@ RUN KARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
     esac \
  # ----- AWS CLI v2 -----
  && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o awscliv2.zip \
+ && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip.sig" -o awscliv2.sig \
+ && GNUPGHOME="$(mktemp -d)" && export GNUPGHOME \
+ && gpg --batch --quiet --import /build/aws-cli-public-key.asc \
+ && { gpg --batch --status-file gpg.status --verify awscliv2.sig awscliv2.zip 2>/dev/null || true; } \
+ && grep -q "^\[GNUPG:\] VALIDSIG ${AWS_CLI_KEY_FPR} " gpg.status \
+ && rm -rf "$GNUPGHOME" awscliv2.sig gpg.status \
  && unzip -q awscliv2.zip \
  && ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli \
  && rm -rf awscliv2.zip aws \

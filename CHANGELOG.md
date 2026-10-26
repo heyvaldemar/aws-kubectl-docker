@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [2.3.0] - 2026-10-26
+
+### Added
+
+- **A tag per Kubernetes minor: `kube-1.37`, `kube-1.36`, `kube-1.35`.** The three newest minors, each rebuilt every week and on every main build with its current patch release and the week's security updates, and never moved to another minor. `latest` follows the newest minor, so a pipeline on it got a new kubectl minor the week one shipped, and kubectl is supported within one minor of the API server. Nothing about the existing tags changes.
+- **A contract test against the published image, before anything is published.** The smoke test asks whether the advertised tools work; this asks whether anything a pipeline used yesterday is gone today: every executable on `PATH` (508, advertised or not), the user, `HOME`, working directory, entrypoint, command and `PATH`, the AWS CLI major, and kubectl no older (and on its own minor, on a `kube-<minor>` tag). A deliberate removal must be named in `tests/contract-removed.tsv`. Shown its breaks: a tool nobody advertised (`tar`) removed, the working directory moved.
+- **The AWS CLI archive is verified against the AWS CLI team's PGP signature**, by fingerprint, with the key AWS publishes kept in the repository. An archive signed by any other key fails the build (a planted wrong fingerprint is caught). The key expires on 2027-07-01; CI goes red 30 days before.
+
 ### Fixed
 
 - **The pinning claim names its one exception.** The README said every
@@ -14,10 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `release-assets.yml` is pinned by tag, as it must be, and Scorecard counts
   it. The workflow comment that said Scorecard does not count it is corrected
   too.
-- **"checksum-verified" now says what is verified.** Only kubectl is checked
-  against its sha256; the AWS CLI installer is downloaded over TLS without a
-  signature check. README, the Docker Hub short description and the Dockerfile
-  comment say so.
+- **"checksum-verified" now says what is verified.** It said so of both tools
+  while only kubectl was checked, against its sha256. This release adds the AWS
+  CLI's PGP signature check (above), and the README, the Docker Hub short
+  description and the Dockerfile comment say which check covers which tool.
 - **PodSecurityPolicy is gone from the docs.** It was removed in Kubernetes
   1.25; the README now refers to the Pod Security Standards `restricted`
   profile and Pod Security Admission, and says which part of that profile the
@@ -289,7 +299,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runAsGroup: 0`, `fsGroup: 0`. See the README "Breaking Changes in v2.0" section
   for the full spec.
 
-[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.1...HEAD
+[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.0.0...v2.1.0
