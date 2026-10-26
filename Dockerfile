@@ -57,7 +57,7 @@ RUN KARCH="${TARGETARCH:-$(dpkg --print-architecture)}" \
  && ./aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli \
  && rm -rf awscliv2.zip aws \
  # ----- kubectl (versioned + checksum verification) -----
- && if [[ "${KUBE_VERSION}" == "latest" ]]; then \
+ && if [ "${KUBE_VERSION}" = "latest" ]; then \
         KUBE_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"; \
     fi \
  && curl -fsSLo kubectl "https://dl.k8s.io/release/${KUBE_VERSION}/bin/linux/${KARCH}/kubectl" \
