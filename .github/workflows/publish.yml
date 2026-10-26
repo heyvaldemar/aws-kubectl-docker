@@ -366,6 +366,26 @@ jobs:
           # its open alerts carry on; the older lines get their own.
           category: ${{ matrix.line.newest && 'trivy' || format('trivy-kube-{0}', matrix.line.minor) }}
 
+  # The ruleset requires checks by names that stay put while Kubernetes minors
+  # enter and leave the lines. The matrix jobs are named by minor, so this one
+  # stands for all of them, and fails if any line failed or was skipped.
+  published:
+    name: Build and Publish Docker Image
+    runs-on: ubuntu-latest
+    needs: [lint, versions, test, build]
+    if: always()
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Every line was tested and built
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "lint, versions, test, build: $RESULTS"
+          for r in $RESULTS; do
+            [ "$r" = success ] || { echo "::error::a job this one stands for ended '$r'"; exit 1; }
+          done
+
   dockerhub-description:
     name: Sync Docker Hub description
     runs-on: ubuntu-latest
