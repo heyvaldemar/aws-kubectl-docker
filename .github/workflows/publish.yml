@@ -68,7 +68,11 @@ jobs:
           for i in 0 1 2; do
             line="${major}.$((m - i))"
             version="$(curl -fsSL "https://dl.k8s.io/release/stable-${line}.txt")"
-            case "$version" in v"${line}".*) ;; *) echo "::error::stable-${line}.txt answered '${version}'"; exit 1 ;; esac
+            # Strictly vMAJOR.MINOR.PATCH on this line: the value reaches build
+            # arguments and tag names, so nothing else is let through.
+            if ! [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || [ "${version%.*}" != "v${line}" ]; then
+              echo "::error::stable-${line}.txt answered something that is not a v${line}.N release"; exit 1
+            fi
             lines="$(jq -c --arg minor "$line" --arg version "$version" --argjson newest "$([ "$i" = 0 ] && echo true || echo false)" \
               '. + [{minor: $minor, version: $version, newest: $newest}]' <<<"$lines")"
           done
