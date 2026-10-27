@@ -38,6 +38,7 @@
   - [Security Notes](#security-notes)
   - [Run as root (override)](#run-as-root-override)
   - [Standardization reference](#standardization-reference)
+  - [Bugs, changes and vulnerabilities](#bugs-changes-and-vulnerabilities)
   - [About the maintainer](#about-the-maintainer)
 
 This image bundles AWS CLI v2 (`aws`) and kubectl on Ubuntu 26.04. It also includes `jq`, `curl`, `unzip`, and `envsubst` (from `gettext-base`). Perfect for CI/CD steps, automation, and reproducible local scripting.
@@ -435,6 +436,10 @@ The patterns in this image are codified as a reusable standard at [`heyvaldemar/
 - Pinning guidance documentation for downstream consumers
 
 Six mandatory phases plus an optional non-root migration phase for repos with existing `:latest` audiences. Eight production-grounded pitfalls drawn from this repo's own PR history.
+
+## Bugs, changes and vulnerabilities
+
+Report a bug or ask for a change in [issues](https://github.com/heyvaldemar/aws-kubectl-docker/issues). Pull requests are welcome: the smoke test, the contract test and the planted violations run on them before anything can merge. Report a vulnerability privately, as [SECURITY.md](SECURITY.md) describes.
 
 ---
 
