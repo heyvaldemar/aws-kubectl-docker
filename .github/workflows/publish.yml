@@ -17,6 +17,11 @@ concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Every job names its own permissions; this is the default for one that
+# does not, so a job added later starts with read access and nothing more.
+permissions:
+  contents: read
+
 env:
   IMAGE_NAME: heyvaldemar/aws-kubectl
 
