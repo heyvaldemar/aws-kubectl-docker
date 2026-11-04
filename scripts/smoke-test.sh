@@ -28,7 +28,7 @@ run "docker run --rm '$IMAGE' sh -c 'unzip -v | head -n2'"
 # Binary presence + CA bundle.
 run "docker run --rm '$IMAGE' sh -c 'ls -l /usr/local/bin/kubectl; for b in aws jq envsubst curl unzip; do command -v \"\$b\"; done'"
 run "docker run --rm '$IMAGE' sh -c 'ls -lh /etc/ssl/certs/ca-certificates.crt'"
-run "docker run --rm '$IMAGE' sh -c 'curl -fsSI -o /dev/null -w \"HTTPS OK (%{http_code})\\n\" https://kubernetes.io'"
+run "docker run --rm '$IMAGE' sh -c 'curl -fsSI --max-time 20 -o /dev/null -w \"HTTPS OK (%{http_code})\\n\" https://kubernetes.io'"
 
 # /etc/kube-version must match the kubectl client version reported at runtime.
 say "Verifying /etc/kube-version matches kubectl --client"

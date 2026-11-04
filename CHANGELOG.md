@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Fixed
+
+- **The smoke test's HTTPS check gives up after 20 seconds.** `scripts/smoke-test.sh` asked `https://kubernetes.io` with no time limit, so a connection that stalled hung the test until the job's own timeout instead of failing it. `curl --max-time 20` now fails it. Test script only; the image is unchanged.
 
 ## [2.3.0] - 2026-10-26
 
