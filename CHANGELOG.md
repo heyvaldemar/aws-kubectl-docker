@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The Docker Hub token and the JWT are no longer on a command line.** `scripts/cleanup-legacy-tags.sh` and the `dockerhub-tag-cleanup` workflow logged in with the access token inside curl's `-d` argument, and sent the JWT as `-H "Authorization: Bearer …"`: both in curl's arguments, where every user on the machine (or every process on the runner) reads them with `ps`. The login body now reaches curl on stdin (`-d @-`, built by `python3` or `jq` from the environment), and the JWT a config file only the job's user can read (`-K`).
+
 ### Fixed
 
 - **The smoke test's HTTPS check gives up after 20 seconds.** `scripts/smoke-test.sh` asked `https://kubernetes.io` with no time limit, so a connection that stalled hung the test until the job's own timeout instead of failing it. `curl --max-time 20` now fails it. Test script only; the image is unchanged.

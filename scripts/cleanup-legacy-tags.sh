@@ -73,20 +73,26 @@ LOGIN_BODY=$(python3 -c '
 import json, os
 print(json.dumps({"username": "heyvaldemar", "password": os.environ["DOCKERHUB_PAT"]}))
 ')
+# THE PAT AND THE JWT NEVER GO ON A COMMAND LINE: every user on this machine
+# reads a process's arguments with ps. The login body reaches curl on stdin
+# (-d @-), and the JWT in a curl config file only this user can read (-K).
 JWT=$(
-  DOCKERHUB_PAT="${DOCKERHUB_PAT}" \
-  curl -sS -f \
+  printf '%s' "${LOGIN_BODY}" | curl -sS -f \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
     -H "User-Agent: ${UA}" \
     -X POST \
-    -d "${LOGIN_BODY}" \
+    -d @- \
     "${API}/v2/users/login/" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("token",""))'
 )
+unset LOGIN_BODY
 if [ -z "${JWT}" ]; then
   echo "ERROR: JWT exchange failed (empty token)." >&2
   exit 1
 fi
+AUTH_CONFIG="$(mktemp)"
+trap 'rm -f "${AUTH_CONFIG}"' EXIT
+printf 'header = "Authorization: Bearer %s"\n' "${JWT}" > "${AUTH_CONFIG}"
 
 # --execute requires explicit confirmation. Typed "DELETE", nothing else.
 if [ "${MODE}" = "--execute" ]; then
@@ -108,7 +114,7 @@ for tag in "${LEGACY_TAGS[@]}"; do
   URL="${API}/v2/repositories/${REPO}/tags/${tag}/"
   if [ "${MODE}" = "--dry-run" ]; then
     HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
-      -H "Authorization: Bearer ${JWT}" \
+      -K "${AUTH_CONFIG}" \
       -H "Accept: application/json" \
       -H "User-Agent: ${UA}" \
       "${URL}")
@@ -121,7 +127,7 @@ for tag in "${LEGACY_TAGS[@]}"; do
   else
     HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
       -X DELETE \
-      -H "Authorization: Bearer ${JWT}" \
+      -K "${AUTH_CONFIG}" \
       -H "Accept: application/json" \
       -H "User-Agent: ${UA}" \
       "${URL}")
