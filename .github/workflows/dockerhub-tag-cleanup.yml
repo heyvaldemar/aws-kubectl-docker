@@ -37,11 +37,13 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          JWT=$(curl -sS -f \
+          # The token reaches curl on stdin (-d @-), never in its arguments,
+          # where every process on the runner could read it with ps.
+          JWT=$(jq -n '{username: env.DOCKERHUB_USERNAME, password: env.DOCKERHUB_TOKEN}' | curl -sS -f \
             -H "Content-Type: application/json" \
             -H "Accept: application/json" \
             -X POST \
-            -d "{\"username\": \"${DOCKERHUB_USERNAME}\", \"password\": \"${DOCKERHUB_TOKEN}\"}" \
+            -d @- \
             https://hub.docker.com/v2/users/login/ | jq -r '.token')
           if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
             echo "::error::Failed to obtain Docker Hub JWT"
@@ -59,6 +61,9 @@ jobs:
           CUTOFF=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)
           echo "Cutoff date (delete tags updated before this): $CUTOFF"
 
+          # The JWT goes to curl in a config file (-K), not as -H.
+          AUTH_CONFIG=$(mktemp)
+          printf 'header = "Authorization: Bearer %s"\n' "$JWT" > "$AUTH_CONFIG"
           # Fetch all tags with pagination.
           ALL_TAGS_JSON=$(mktemp)
           NEXT_URL="https://hub.docker.com/v2/repositories/heyvaldemar/aws-kubectl/tags/?page_size=100"
@@ -66,7 +71,7 @@ jobs:
           while [ "$NEXT_URL" != "null" ] && [ -n "$NEXT_URL" ]; do
             RESPONSE=$(curl -sS -f \
               -H "Accept: application/json" \
-              -H "Authorization: Bearer $JWT" \
+              -K "$AUTH_CONFIG" \
               "$NEXT_URL")
             echo "$RESPONSE" | jq '.results' > /tmp/page.json
             jq -s '.[0] + .[1]' "$ALL_TAGS_JSON" /tmp/page.json > /tmp/merged.json
@@ -100,6 +105,9 @@ jobs:
           # humans testing the workflow).
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: |
+          # The JWT goes to curl in a config file (-K), not as -H.
+          AUTH_CONFIG=$(mktemp)
+          printf 'header = "Authorization: Bearer %s"\n' "$JWT" > "$AUTH_CONFIG"
           DELETED=0
           ERRORS=0
           while IFS= read -r tag; do
@@ -110,7 +118,7 @@ jobs:
               HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
                 -X DELETE \
                 -H "Accept: application/json" \
-                -H "Authorization: Bearer $JWT" \
+                -K "$AUTH_CONFIG" \
                 "https://hub.docker.com/v2/repositories/heyvaldemar/aws-kubectl/tags/$tag/")
               if [ "$HTTP_CODE" = "204" ]; then
                 echo "deleted: $tag"
