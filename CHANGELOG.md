@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`SECURITY.md` and the image's `org.opencontainers.image.authors` label give the public contact address**, and `SECURITY.md` links GitHub's form for a private vulnerability report directly. The label reaches the published images with the next weekly rebuild; nothing else in them changes.
+
 ### Security
 
 - **The Docker Hub token and the JWT are no longer on a command line.** `scripts/cleanup-legacy-tags.sh` and the `dockerhub-tag-cleanup` workflow logged in with the access token inside curl's `-d` argument, and sent the JWT as `-H "Authorization: Bearer …"`: both in curl's arguments, where every user on the machine (or every process on the runner) reads them with `ps`. The login body now reaches curl on stdin (`-d @-`, built by `python3` or `jq` from the environment), and the JWT a config file only the job's user can read (`-K`).
