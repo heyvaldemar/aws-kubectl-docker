@@ -109,7 +109,7 @@ RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws \
 
 LABEL org.opencontainers.image.title="aws-kubectl" \
       org.opencontainers.image.description="Ubuntu 26.04 image bundling AWS CLI v2, kubectl, jq, envsubst, curl and ca-certificates for CI/CD and local tooling." \
-      org.opencontainers.image.authors="Vladimir Mikhalev <v@valdemar.ai>" \
+      org.opencontainers.image.authors="Vladimir Mikhalev <connect@valdemar.ai>" \
       org.opencontainers.image.vendor="heyvaldemar" \
       org.opencontainers.image.source="https://github.com/heyvaldemar/aws-kubectl-docker" \
       org.opencontainers.image.documentation="https://github.com/heyvaldemar/aws-kubectl-docker#readme" \
