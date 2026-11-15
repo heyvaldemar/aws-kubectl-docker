@@ -393,6 +393,18 @@ jobs:
             org.opencontainers.image.licenses=MIT
             io.heyvaldemar.kubectl.version=${{ steps.kube.outputs.version }}
 
+      # COSIGN IS INSTALLED BEFORE ANYTHING IS PUSHED. On 5 November 2026, in
+      # heyvaldemar/kubectl-docker, GitHub answered cosign-installer 504 after
+      # the push: signing could not run, and 1.36 and 1.36.6 named an unsigned
+      # image for 89 minutes. A failed install now fails the job while nothing
+      # is public yet; the signing action below finds this cosign and does not
+      # download it again.
+      - name: Install cosign before anything is pushed
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: "v2.6.1"
+
       - name: Build and push
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7

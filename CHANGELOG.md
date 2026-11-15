@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_(no unreleased changes yet)_
+### Changed
+
+- **Cosign is installed before anything is pushed.** The build job installs cosign v2.6.1 before `Build and push`, and the signing action finds it there. On 5 November 2026 in heyvaldemar/kubectl-docker, GitHub answered `cosign-installer` 504 after the push, so signing could not run and two tags named an unsigned image for 89 minutes; a failed install now fails the job before anything is public. Anything else that fails between the push and the signature still leaves the image unsigned until the read-back signs it or names it.
 
 ## [2.3.1] - 2026-11-15
 
