@@ -149,19 +149,24 @@ jobs:
   # The steps that sign, attest and read back a published image, shown each
   # failure they exist for. It runs the same action the build job runs after
   # its push (.github/actions/sign-attest-verify), on throwaway images in a
-  # registry on this runner, signed with a key made here: nothing reaches
-  # Docker Hub, GitHub's attestation store or Sigstore's public log. One run
-  # plants nothing, one an attestation that fails as Rekor made it fail on
-  # 2 November 2026, one a signing step that fails, and one a tag another run
-  # moved to an image nobody signed; tests/signing-plants.sh says what each
-  # must show.
+  # registry on this runner, signed with keys made here: nothing reaches
+  # Docker Hub, GitHub's attestation store or Sigstore's public log. The cases:
+  # nothing planted; the real attestation step failing, as Rekor made it fail
+  # on 2 November 2026 (this job has no OIDC token, so it fails before it
+  # contacts anything); signing failing; signing skipped without a word; a tag
+  # another run moved to an image signed by a stranger's key; a push that
+  # stopped half way. tests/signing-plants.sh says what each must show.
   signing:
     name: Signing, shown each failure it must survive
     runs-on: ubuntu-latest
     needs: [lint]
     timeout-minutes: 15
+    # No id-token: write, ever. Without it the attestation step can only
+    # fail, and setup refuses to run if a token is available.
     permissions:
       contents: read
+    env:
+      OWN_SIGNATURE_WAIT: "15"
     services:
       registry:
         image: registry:3.1.2@sha256:82f6ff4a7f982960c8aa51617fea3aabc485df6e55cce80d22deb1de36f1bc3c
@@ -176,7 +181,7 @@ jobs:
         with:
           cosign-release: "v2.6.1"
 
-      - name: A throwaway key, and an image for each case in the local registry
+      - name: Throwaway keys, and an image for each case in the local registry
         id: setup
         run: ./tests/signing-plants.sh setup
 
@@ -217,7 +222,20 @@ jobs:
           plant: sign-fails
           cosign-key: ${{ steps.setup.outputs.key }}
 
-      - name: "Plant: another run moved a tag to an image nobody signed"
+      - name: "Plant: signing is skipped without a word"
+        id: sign_skipped
+        continue-on-error: true
+        uses: ./.github/actions/sign-attest-verify
+        with:
+          image: localhost:5000/sign-skipped
+          digest: ${{ steps.setup.outputs.sign_skipped }}
+          tags: |
+            localhost:5000/sign-skipped:latest
+            localhost:5000/sign-skipped:edge
+          plant: sign-skipped
+          cosign-key: ${{ steps.setup.outputs.key }}
+
+      - name: "Plant: another run moved a tag to an image this workflow did not sign"
         id: moved
         continue-on-error: true
         uses: ./.github/actions/sign-attest-verify
@@ -231,18 +249,36 @@ jobs:
           plant: none
           cosign-key: ${{ steps.setup.outputs.key }}
 
+      - name: "Plant: the push stopped half way"
+        id: unfinished
+        continue-on-error: true
+        uses: ./.github/actions/sign-attest-verify
+        with:
+          image: localhost:5000/unfinished
+          digest: ""
+          tags: |
+            localhost:5000/unfinished:2.3.1
+            localhost:5000/unfinished:2.3
+          other-run-wait: "0"
+          plant: none
+          cosign-key: ${{ steps.setup.outputs.key }}
+
       - name: Each failure was noticed, and every image this run built is signed
         env:
           KEY: ${{ steps.setup.outputs.key }}
           UNTOUCHED: ${{ steps.setup.outputs.untouched }}
           ATTEST_FAILS: ${{ steps.setup.outputs.attest_fails }}
           SIGN_FAILS: ${{ steps.setup.outputs.sign_fails }}
+          SIGN_SKIPPED: ${{ steps.setup.outputs.sign_skipped }}
           MOVED: ${{ steps.setup.outputs.moved }}
           MOVED_OTHER: ${{ steps.setup.outputs.moved_other }}
+          UNFINISHED: ${{ steps.setup.outputs.unfinished }}
           UNTOUCHED_OUTCOME: ${{ steps.untouched.outcome }}
           ATTEST_FAILS_OUTCOME: ${{ steps.attest_fails.outcome }}
           SIGN_FAILS_OUTCOME: ${{ steps.sign_fails.outcome }}
+          SIGN_SKIPPED_OUTCOME: ${{ steps.sign_skipped.outcome }}
           MOVED_OUTCOME: ${{ steps.moved.outcome }}
+          UNFINISHED_OUTCOME: ${{ steps.unfinished.outcome }}
         run: ./tests/signing-plants.sh check
 
   build:
@@ -387,8 +423,10 @@ jobs:
       # pushed here is read back from Docker Hub: the digest it names must
       # carry a cosign signature that verifies as this workflow, or the job
       # fails (and a digest this job built is signed again). It runs even when
-      # the push failed half way, which is how 2.2.0 went out unsigned. The
-      # signing job above runs the same action with each failure planted.
+      # the push failed half way, which is how 2.2.0 went out unsigned: the
+      # build reports no digest then, so the tags it already moved are
+      # reported, not signed. The signing job above runs the same action with
+      # each failure planted.
       - name: Sign, attest, and read back every pushed tag from Docker Hub
         if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.meta.outcome == 'success' }}
         uses: ./.github/actions/sign-attest-verify

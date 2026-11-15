@@ -38,10 +38,12 @@ inputs:
     default: "300"
   plant:
     description: >-
-      The signing test only; publish.yml never sets it. "attest-fails" or
-      "sign-fails" puts a failing step in that step's place, "none" plants
-      nothing. Any value skips the GitHub attestation, which a throwaway image
-      must not get.
+      The signing test only; publish.yml never sets it. "attest-fails" runs
+      the real attestation step in a job with no OIDC token, where it fails
+      before it contacts anything. "sign-fails" puts a failing step in the
+      signing step's place, "sign-skipped" one that signs nothing and
+      succeeds. "none" plants nothing. Any other case skips the attestation,
+      which a throwaway image must not get.
     required: false
     default: ""
   cosign-key:
@@ -60,7 +62,7 @@ runs:
     # (see hotfix #20). Cosign v2 keeps the tag-based .sig storage that works
     # on Docker Hub today, and that the read-back below asks for. Moving to v3
     # is a separate piece of work. A job that already installed this version
-    # (the signing test runs this action four times) does not download it
+    # (the signing test runs this action six times) does not download it
     # again: each download is one more chance of a 5xx from GitHub.
     - name: Is cosign v2.6.1 installed
       id: cosign
@@ -79,7 +81,7 @@ runs:
         cosign-release: "v2.6.1"
 
     - name: Sign the pushed digest with cosign
-      if: ${{ inputs.digest != '' && inputs.plant != 'sign-fails' }}
+      if: ${{ inputs.digest != '' && inputs.plant != 'sign-fails' && inputs.plant != 'sign-skipped' }}
       shell: bash
       env:
         IMAGE: ${{ inputs.image }}
@@ -97,8 +99,17 @@ runs:
         echo "::error::planted: signing failed"
         exit 1
 
+    # What 2 November did: no signing step ran, and nothing said so.
+    - name: "Plant: signing is skipped"
+      if: ${{ inputs.digest != '' && inputs.plant == 'sign-skipped' }}
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: printf 'planted\tsign-skipped\t%s\n' "$IMAGE" >> "${RUNNER_TEMP}/signing.log"
+
     - name: Attest build provenance
-      if: ${{ !cancelled() && inputs.digest != '' && inputs.plant == '' }}
+      id: attest
+      if: ${{ !cancelled() && inputs.digest != '' && (inputs.plant == '' || inputs.plant == 'attest-fails') }}
       uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
       with:
         subject-name: ${{ inputs.image }}
@@ -107,15 +118,13 @@ runs:
         # attestation remains available via GitHub Attestations storage.
         push-to-registry: false
 
-    - name: "Plant: the attestation fails"
-      if: ${{ !cancelled() && inputs.digest != '' && inputs.plant == 'attest-fails' }}
+    - name: "Plant: what the attestation step did"
+      if: ${{ !cancelled() && inputs.plant != '' }}
       shell: bash
       env:
         IMAGE: ${{ inputs.image }}
-      run: |
-        printf 'planted\tattest-fails\t%s\n' "$IMAGE" >> "${RUNNER_TEMP}/signing.log"
-        echo "::error::planted: error creating tlog entry - (502) Bad Gateway"
-        exit 1
+        OUTCOME: ${{ steps.attest.outcome }}
+      run: printf 'attest\t%s\t%s\n' "${OUTCOME:-none}" "$IMAGE" >> "${RUNNER_TEMP}/signing.log"
 
     - name: Every pushed tag names a signed digest on the registry
       if: ${{ !cancelled() }}

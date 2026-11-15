@@ -21,6 +21,8 @@
 #              signed is accepted from this workflow file on any ref.
 # COSIGN_KEY   the signing test only: verify with the public key beside this
 #              private key (cosign.pub beside cosign.key) instead.
+# OWN_SIGNATURE_WAIT  seconds this run's own signature gets to show on the
+#              registry before it counts as missing (90).
 #
 # What fails the job:
 # - The digest this run pushed has no signature. It is signed here and now
@@ -32,6 +34,9 @@
 #   OTHER_RUN_WAIT seconds (300) to do so. A digest this run did not build is
 #   never signed here.
 # - A tag the build pushed is missing, or the registry cannot be read.
+# - The build reports no digest (its push did not finish) and a tag names an
+#   unsigned image. It may be this run's own, but nothing says which digest
+#   this run built, so it is reported, not signed.
 #
 # Each result goes to the signing log ($SIGNING_LOG, by default
 # $RUNNER_TEMP/signing.log) as "<event>\t<image>@<digest>": verified, missing,
@@ -42,6 +47,7 @@ set -euo pipefail
 : "${TAGS:?TAGS is every tag the build pushed}"
 DIGEST="${DIGEST:-}"
 OTHER_RUN_WAIT="${OTHER_RUN_WAIT:-300}"
+OWN_SIGNATURE_WAIT="${OWN_SIGNATURE_WAIT:-90}"
 log="${SIGNING_LOG:-${RUNNER_TEMP:-/tmp}/signing.log}"
 here="$(cd "$(dirname "$0")" && pwd)"
 issuer=https://token.actions.githubusercontent.com
@@ -165,7 +171,7 @@ ours="${ours# }"
 
 if [ -n "$DIGEST" ]; then
   [ -n "$ours" ] || echo "::warning::no tag names ${IMAGE}@${DIGEST} any more; its signature is checked all the same"
-  if signature_on "$DIGEST" 30; then
+  if signature_on "$DIGEST" "$OWN_SIGNATURE_WAIT"; then
     if verifies "$DIGEST" this; then
       record verified "$DIGEST"
       row "$DIGEST" "$ours" "signed by this run, verified"
@@ -176,7 +182,7 @@ if [ -n "$DIGEST" ]; then
   else
     record missing "$DIGEST"
     fail "UNSIGNED: ${IMAGE}@${DIGEST} (${ours:-no tag}) has no cosign signature on the registry: sha256-${DIGEST#sha256:}.sig answered ${CODE}. This run built it, so it signs it now; the job fails either way, because the signing step did not."
-    if SIGNED_BY=resigned "${here}/sign-digest.sh" && signature_on "$DIGEST" 30 && verifies "$DIGEST" this; then
+    if SIGNED_BY=resigned "${here}/sign-digest.sh" && signature_on "$DIGEST" "$OWN_SIGNATURE_WAIT" && verifies "$DIGEST" this; then
       record verified "$DIGEST"
       row "$DIGEST" "$ours" "UNSIGNED after the signing step; signed by this check, verified"
     else
