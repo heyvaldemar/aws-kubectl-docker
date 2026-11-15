@@ -185,15 +185,20 @@ if [ -n "$DIGEST" ]; then
   fi
 fi
 
+if [ -n "$DIGEST" ]; then
+  why="This run did not build it, so it does not sign it."
+else
+  why="This run's push did not finish, so it cannot tell whether it built this image, and signs nothing."
+fi
 for d in $(printf '%s' "$others" | cut -f1 | sort -u); do
   tags="$(printf '%s' "$others" | awk -F'\t' -v d="$d" '$1 == d { printf "%s%s", sep, $2; sep = " " }')"
   if signature_on "$d" "$OTHER_RUN_WAIT" && verifies "$d" any; then
     record verified-other "$d"
-    row "$d" "$tags" "signed by another run of this workflow, verified"
+    row "$d" "$tags" "signed by a run of this workflow, verified"
   else
     record unsigned-other "$d"
-    fail "UNSIGNED: ${IMAGE}@${d} (${tags}) has no signature from this repository's publish workflow. This run did not build it, so it does not sign it."
-    row "$d" "$tags" "UNSIGNED, not built by this run"
+    fail "UNSIGNED: ${IMAGE}@${d} (${tags}) has no signature from this repository's publish workflow. ${why}"
+    row "$d" "$tags" "UNSIGNED, not signed here"
   fi
 done
 
