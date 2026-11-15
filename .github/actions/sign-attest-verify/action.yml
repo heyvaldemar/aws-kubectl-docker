@@ -1,0 +1,130 @@
+name: Sign, attest, and read back what the registry serves
+description: >-
+  Runs after an image is pushed. Signs the pushed digest with cosign, then
+  attests its build provenance, then reads every pushed tag back from the
+  registry and requires the digest it names to carry a cosign signature that
+  verifies. Signing runs whatever the attestation does, and the read-back runs
+  whatever both did. publish.yml runs it after every push to Docker Hub, and
+  its signing test runs the same steps against a local registry with each
+  failure planted.
+
+# SIGNING DOES NOT WAIT FOR THE ATTESTATION. Until this action existed, the
+# cosign steps came after actions/attest-build-provenance and ran only if it
+# succeeded. On 2 November 2026 Rekor answered the attestation "(502) Bad
+# Gateway" (scheduled run 41472494237): the image was already pushed, signing
+# was skipped, and latest, edge and kube-1.37 named an unsigned image from
+# 15:37 UTC that day until the next push replaced it, at 04:33 UTC on
+# 4 November. The order is now push, sign, attest, read back. Signing waits
+# for nothing but cosign's installation; the attestation and the read-back run
+# whatever the steps before them did, and either failing fails the job.
+
+inputs:
+  image:
+    description: The repository the build pushed to, without a tag (heyvaldemar/aws-kubectl).
+    required: true
+  digest:
+    description: >-
+      The digest the build pushed. Empty when the push did not finish: nothing
+      is signed or attested then, and every tag is still read back, because a
+      push refused half way has already moved some of them.
+    required: false
+    default: ""
+  tags:
+    description: Every tag the build pushed, one full reference per line, as docker/metadata-action prints them.
+    required: true
+  other-run-wait:
+    description: Seconds a tag another run has moved gets for that run's own signature to appear.
+    required: false
+    default: "300"
+  plant:
+    description: >-
+      The signing test only; publish.yml never sets it. "attest-fails" or
+      "sign-fails" puts a failing step in that step's place, "none" plants
+      nothing. Any value skips the GitHub attestation, which a throwaway image
+      must not get.
+    required: false
+    default: ""
+  cosign-key:
+    description: >-
+      The signing test only. A private key file to sign with, offline, instead
+      of keyless; the public key is the .pub file beside it.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # Cosign v2.6.1, explicitly: cosign-installer v4 defaults to Cosign v3.x,
+    # which stores container signatures as OCI 1.1 referring artifacts, and
+    # Docker Hub's OCI referrer credential handoff proved unreliable in Phase 2
+    # (see hotfix #20). Cosign v2 keeps the tag-based .sig storage that works
+    # on Docker Hub today, and that the read-back below asks for. Moving to v3
+    # is a separate piece of work. A job that already installed this version
+    # (the signing test runs this action four times) does not download it
+    # again: each download is one more chance of a 5xx from GitHub.
+    - name: Is cosign v2.6.1 installed
+      id: cosign
+      shell: bash
+      run: |
+        if command -v cosign >/dev/null && cosign version 2>/dev/null | grep -Eq '^GitVersion:[[:space:]]+v2\.6\.1$'; then
+          echo "installed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "installed=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Install cosign
+      if: ${{ steps.cosign.outputs.installed != 'true' }}
+      uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      with:
+        cosign-release: "v2.6.1"
+
+    - name: Sign the pushed digest with cosign
+      if: ${{ inputs.digest != '' && inputs.plant != 'sign-fails' }}
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        DIGEST: ${{ inputs.digest }}
+        COSIGN_KEY: ${{ inputs.cosign-key }}
+      run: '"${GITHUB_WORKSPACE}/scripts/sign-digest.sh"'
+
+    - name: "Plant: signing fails"
+      if: ${{ inputs.digest != '' && inputs.plant == 'sign-fails' }}
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        printf 'planted\tsign-fails\t%s\n' "$IMAGE" >> "${RUNNER_TEMP}/signing.log"
+        echo "::error::planted: signing failed"
+        exit 1
+
+    - name: Attest build provenance
+      if: ${{ !cancelled() && inputs.digest != '' && inputs.plant == '' }}
+      uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      with:
+        subject-name: ${{ inputs.image }}
+        subject-digest: ${{ inputs.digest }}
+        # Docker Hub OCI referrers credential handoff is unreliable here; the
+        # attestation remains available via GitHub Attestations storage.
+        push-to-registry: false
+
+    - name: "Plant: the attestation fails"
+      if: ${{ !cancelled() && inputs.digest != '' && inputs.plant == 'attest-fails' }}
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        printf 'planted\tattest-fails\t%s\n' "$IMAGE" >> "${RUNNER_TEMP}/signing.log"
+        echo "::error::planted: error creating tlog entry - (502) Bad Gateway"
+        exit 1
+
+    - name: Every pushed tag names a signed digest on the registry
+      if: ${{ !cancelled() }}
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        DIGEST: ${{ inputs.digest }}
+        TAGS: ${{ inputs.tags }}
+        OTHER_RUN_WAIT: ${{ inputs.other-run-wait }}
+        COSIGN_KEY: ${{ inputs.cosign-key }}
+        CERT_IDENTITY: https://github.com/${{ github.workflow_ref }}
+      run: '"${GITHUB_WORKSPACE}/scripts/verify-published.sh"'

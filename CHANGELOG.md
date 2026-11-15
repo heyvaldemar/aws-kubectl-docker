@@ -7,17 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_(no unreleased changes yet)_
+
+## [2.3.1] - 2026-11-15
+
+### Added
+
+- **Every tag a run pushes is read back from Docker Hub after signing.** For each one the run resolves the digest the tag names now, and requires that digest's cosign signature (`sha256-<digest>.sig`, HTTP 200) and a `cosign verify` that passes: for the digest this run pushed, as this run's exact workflow identity and commit; for a digest another run has moved the tag to since, as this repository's publish workflow on any ref. A missing signature fails the job. A digest this run built is then signed again; a digest it did not build never is. It runs even after a push refused half way, which is how 2.2.0 went out unsigned, and writes what it found to the run summary (`scripts/verify-published.sh`).
+- **The signing steps are shown each failure they exist for, before anything is published.** Signing, attesting and reading back are one action, `.github/actions/sign-attest-verify`, which the build job runs after its push and a new `signing` job runs four times on throwaway images in a registry on the runner, signed with a key made there: with nothing planted; with the attestation failing as it did on 2 November (the image is signed before the failure, and the job still fails); with signing failing (the read-back finds no signature, fails, and signs the digest); and with a tag another run moved to an image nobody signed (the job fails, and that image stays unsigned). Nothing reaches Docker Hub, GitHub's attestation store or Sigstore's public log. The build waits for it, and so does the required check.
+
 ### Changed
 
-- **`SECURITY.md` and the image's `org.opencontainers.image.authors` label give the public contact address**, and `SECURITY.md` links GitHub's form for a private vulnerability report directly. The label reaches the published images with the next weekly rebuild; nothing else in them changes.
+- **`SECURITY.md` and the image's `org.opencontainers.image.authors` label give the public contact address**, and `SECURITY.md` links GitHub's form for a private vulnerability report directly. Images published from 2.3.1 on carry the new label; the immutable tags before it keep the one they shipped with. Nothing else in the image changes.
+
+### Fixed
+
+- **Signing no longer depends on the build attestation.** The cosign steps came after `actions/attest-build-provenance` and ran only if it succeeded. On 2 November 2026 Rekor, Sigstore's transparency log, answered that attestation `(502) Bad Gateway` in the weekly run ([41472494237](https://github.com/heyvaldemar/aws-kubectl-docker/actions/runs/41472494237)): the image was already pushed, signing was skipped, and `latest`, `edge` and `kube-1.37` named an unsigned image, `sha256:3276567dbfa21b24ebc48dfac0a02884239b104628c66fae143eff9bf07f640d`, from 15:37 UTC that day until the next push to main replaced it at 04:33 UTC on 4 November. No tag names it now; it can still be pulled by digest, and it stays unsigned, because a signature made now would name a later run than the one that built it. The pushed digest is now signed first, then attested; a failed attestation still fails the job, after the signature exists. It is signed once, not once per tag (the signature belongs to the digest either way), and a failed attempt is tried again twice.
+- **The smoke test's HTTPS check gives up after 20 seconds.** `scripts/smoke-test.sh` asked `https://kubernetes.io` with no time limit, so a connection that stalled hung the test until the job's own timeout instead of failing it. `curl --max-time 20` now fails it. Test script only; the image is unchanged.
 
 ### Security
 
 - **The Docker Hub token and the JWT are no longer on a command line.** `scripts/cleanup-legacy-tags.sh` and the `dockerhub-tag-cleanup` workflow logged in with the access token inside curl's `-d` argument, and sent the JWT as `-H "Authorization: Bearer …"`: both in curl's arguments, where every user on the machine (or every process on the runner) reads them with `ps`. The login body now reaches curl on stdin (`-d @-`, built by `python3` or `jq` from the environment), and the JWT a config file only the job's user can read (`-K`).
-
-### Fixed
-
-- **The smoke test's HTTPS check gives up after 20 seconds.** `scripts/smoke-test.sh` asked `https://kubernetes.io` with no time limit, so a connection that stalled hung the test until the job's own timeout instead of failing it. `curl --max-time 20` now fails it. Test script only; the image is unchanged.
 
 ## [2.3.0] - 2026-10-26
 
@@ -309,7 +319,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `runAsGroup: 0`, `fsGroup: 0`. See the README "Breaking Changes in v2.0" section
   for the full spec.
 
-[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.1.0...v2.2.0
