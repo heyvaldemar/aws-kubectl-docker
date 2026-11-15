@@ -11,6 +11,11 @@
 #   CERT_IDENTITY=https://github.com/<owner>/<repo>/.github/workflows/publish.yml@<ref> \
 #     scripts/verify-published.sh
 #
+# MODE=before-tags runs it once more, earlier. The publish job pushes the image
+# by digest with no tag, and names it only after this passes: the digest has
+# a signature that verifies as this run. Nothing is signed in this mode, so an
+# image the signing step did not sign never gets a name. TAGS is not read.
+#
 # DIGEST       what this run's build pushed; empty when the push did not
 #              finish. Every tag is checked even then: a push refused half way
 #              has already moved some of them, which is how 2.2.0 went out
@@ -40,11 +45,18 @@
 #
 # Each result goes to the signing log ($SIGNING_LOG, by default
 # $RUNNER_TEMP/signing.log) as "<event>\t<image>@<digest>": verified, missing,
-# verified-other, unsigned-other. The signing test reads it.
+# verified-other, unsigned-other, and before tags verified-before-tags or
+# missing-before-tags. The signing test reads it.
 set -euo pipefail
 
 : "${IMAGE:?IMAGE is the repository the build pushed to}"
-: "${TAGS:?TAGS is every tag the build pushed}"
+MODE="${MODE:-after-tags}"
+if [ "$MODE" = before-tags ]; then
+  : "${DIGEST:?DIGEST is the digest the build pushed}"
+  TAGS=""
+else
+  : "${TAGS:?TAGS is every tag the build pushed}"
+fi
 DIGEST="${DIGEST:-}"
 OTHER_RUN_WAIT="${OTHER_RUN_WAIT:-300}"
 OWN_SIGNATURE_WAIT="${OWN_SIGNATURE_WAIT:-90}"
@@ -129,6 +141,19 @@ fail() { echo "::error::$*"; failed=1; }
 record() { printf '%s\t%s\n' "$1" "${IMAGE}@$2" >> "$log"; }
 table=""
 row() { table="${table}| \`${1:0:19}…\` | $2 | $3 |"$'\n'; echo "${IMAGE}@$1 ($2): $3"; }
+
+# Before any tag: the image may be named only if its signature is already
+# there and verifies as this run.
+if [ "$MODE" = before-tags ]; then
+  if signature_on "$DIGEST" "$OWN_SIGNATURE_WAIT" && verifies "$DIGEST" this; then
+    record verified-before-tags "$DIGEST"
+    echo "${IMAGE}@${DIGEST}: signed by this run, verified; it may be named"
+    exit 0
+  fi
+  record missing-before-tags "$DIGEST"
+  echo "::error::NOT NAMED: ${IMAGE}@${DIGEST} has no signature that verifies as this run (sha256-${DIGEST#sha256:}.sig answered ${CODE}), so no tag will name it. Whatever the tags named before stays as it was."
+  exit 1
+fi
 
 ours=""     # tags that name the digest this run pushed
 others=""   # "<digest>\t<tag>" for tags that name anything else

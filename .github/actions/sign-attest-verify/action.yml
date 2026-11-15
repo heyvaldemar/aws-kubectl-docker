@@ -1,22 +1,25 @@
-name: Sign, attest, and read back what the registry serves
+name: Sign, attest, name, and read back what the registry serves
 description: >-
-  Runs after an image is pushed. Signs the pushed digest with cosign, then
-  attests its build provenance, then reads every pushed tag back from the
-  registry and requires the digest it names to carry a cosign signature that
-  verifies. Signing runs whatever the attestation does, and the read-back runs
-  whatever both did. publish.yml runs it after every push to Docker Hub, and
-  its signing test runs the same steps against a local registry with each
-  failure planted.
+  Runs after an image is pushed by digest, with no tag. Signs the digest with
+  cosign, attests its build provenance, checks that the signature is on the
+  registry and verifies, and only then points the run's tags at the digest.
+  Last, it reads every tag back from the registry and requires the digest it
+  names to carry a cosign signature that verifies. publish.yml runs it after
+  every push to Docker Hub, and its signing test runs the same steps against a
+  local registry with each failure planted.
 
-# SIGNING DOES NOT WAIT FOR THE ATTESTATION. Until this action existed, the
-# cosign steps came after actions/attest-build-provenance and ran only if it
-# succeeded. On 2 November 2026 Rekor answered the attestation "(502) Bad
-# Gateway" (scheduled run 41472494237): the image was already pushed, signing
-# was skipped, and latest, edge and kube-1.37 named an unsigned image from
-# 15:37 UTC that day until the next push replaced it, at 04:33 UTC on
-# 4 November. The order is now push, sign, attest, read back. Signing waits
-# for nothing but cosign's installation; the attestation and the read-back run
-# whatever the steps before them did, and either failing fails the job.
+# A TAG NEVER NAMES AN UNSIGNED IMAGE. Until 2.3.1 the cosign steps came after
+# actions/attest-build-provenance and ran only if it succeeded. On 2 November
+# 2026 Rekor answered the attestation "(502) Bad Gateway" (scheduled run
+# 41472494237): the image was already pushed under its tags, signing was
+# skipped, and latest, edge and kube-1.37 named an unsigned image from 15:37
+# UTC that day until the next push replaced it, at 04:33 UTC on 4 November.
+# 2.3.1 signed before attesting, but the tags still moved with the push, so
+# any failure between the push and the signature left them on an unsigned
+# image for a while. Now the build pushes by digest and names nothing; this
+# action signs, attests (whatever signing did), checks that the signature
+# verifies, and only then creates the tags. A run whose signature is missing
+# leaves every tag where it was.
 
 inputs:
   image:
@@ -24,16 +27,15 @@ inputs:
     required: true
   digest:
     description: >-
-      The digest the build pushed. Empty when the push did not finish: nothing
-      is signed or attested then, and every tag is still read back, because a
-      push refused half way has already moved some of them.
+      The digest the build pushed, by digest and with no tag. Empty when the
+      push did not finish: then nothing is signed, attested or named.
     required: false
     default: ""
   tags:
-    description: Every tag the build pushed, one full reference per line, as docker/metadata-action prints them.
+    description: Every tag to point at the digest once it is signed, one full reference per line, as docker/metadata-action prints them.
     required: true
   other-run-wait:
-    description: Seconds a tag another run has moved gets for that run's own signature to appear.
+    description: Seconds a tag another run has moved since gets for that run's own signature to appear.
     required: false
     default: "300"
   plant:
@@ -42,8 +44,13 @@ inputs:
       the real attestation step in a job with no OIDC token, where it fails
       before it contacts anything. "sign-fails" puts a failing step in the
       signing step's place, "sign-skipped" one that signs nothing and
-      succeeds. "none" plants nothing. Any other case skips the attestation,
-      which a throwaway image must not get.
+      succeeds. "moved" has another run move the last tag right after the
+      tags are created. "none" plants nothing. Any other case skips the
+      attestation, which a throwaway image must not get.
+    required: false
+    default: ""
+  moved-to:
+    description: The signing test only, with plant "moved". The digest another run moves the last tag to.
     required: false
     default: ""
   cosign-key:
@@ -60,10 +67,10 @@ runs:
     # which stores container signatures as OCI 1.1 referring artifacts, and
     # Docker Hub's OCI referrer credential handoff proved unreliable in Phase 2
     # (see hotfix #20). Cosign v2 keeps the tag-based .sig storage that works
-    # on Docker Hub today, and that the read-back below asks for. Moving to v3
-    # is a separate piece of work. A job that already installed this version
-    # (the signing test runs this action six times) does not download it
-    # again: each download is one more chance of a 5xx from GitHub.
+    # on Docker Hub today, and that the checks below ask for. Moving to v3 is
+    # a separate piece of work. The build job installs it before its push, and
+    # the signing test before its cases, so this finds it and does not
+    # download it again: each download is one more chance of a 5xx from GitHub.
     - name: Is cosign v2.6.1 installed
       id: cosign
       shell: bash
@@ -126,8 +133,45 @@ runs:
         OUTCOME: ${{ steps.attest.outcome }}
       run: printf 'attest\t%s\t%s\n' "${OUTCOME:-none}" "$IMAGE" >> "${RUNNER_TEMP}/signing.log"
 
-    - name: Every pushed tag names a signed digest on the registry
-      if: ${{ !cancelled() }}
+    # The gate: no signature that verifies as this run, no name. A failed
+    # attestation does not stop it (the image is signed; the job fails on the
+    # attestation all the same), a failed or skipped signature does.
+    - name: The signature verifies before any tag names the image
+      id: signed
+      if: ${{ !cancelled() && inputs.digest != '' }}
+      shell: bash
+      env:
+        MODE: before-tags
+        IMAGE: ${{ inputs.image }}
+        DIGEST: ${{ inputs.digest }}
+        COSIGN_KEY: ${{ inputs.cosign-key }}
+        CERT_IDENTITY: https://github.com/${{ github.workflow_ref }}
+      run: '"${GITHUB_WORKSPACE}/scripts/verify-published.sh"'
+
+    - name: Name the signed image
+      id: tag
+      if: ${{ !cancelled() && steps.signed.outcome == 'success' }}
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        DIGEST: ${{ inputs.digest }}
+        TAGS: ${{ inputs.tags }}
+      run: '"${GITHUB_WORKSPACE}/scripts/tag-digest.sh"'
+
+    - name: "Plant: another run moves the last tag"
+      if: ${{ !cancelled() && inputs.plant == 'moved' && steps.tag.outcome == 'success' }}
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        TAGS: ${{ inputs.tags }}
+        MOVED_TO: ${{ inputs.moved-to }}
+      run: |
+        last="$(printf '%s\n' "$TAGS" | sed '/^[[:space:]]*$/d' | tail -n 1 | tr -d '[:space:]')"
+        docker buildx imagetools create --prefer-index=false -t "$last" "${IMAGE}@${MOVED_TO}"
+        printf 'planted\tmoved\t%s\n' "$last" >> "${RUNNER_TEMP}/signing.log"
+
+    - name: Every tag names a signed digest on the registry
+      if: ${{ !cancelled() && steps.tag.outcome != 'skipped' }}
       shell: bash
       env:
         IMAGE: ${{ inputs.image }}

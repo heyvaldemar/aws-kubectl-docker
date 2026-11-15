@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _(no unreleased changes yet)_
 
+## [2.3.2] - 2026-11-15
+
+### Changed
+
+- **A tag never names an unsigned image.** The build pushes the image by digest, with no tag (`push-by-digest=true`). The signing action signs it, attests it, checks that the signature is on Docker Hub and verifies as this workflow, and only then points the tags at it, with `docker buildx imagetools create --prefer-index=false`, which copies the index as it is, so each tag names the signed digest. In 2.3.1 the tags still moved with the push: anything that failed between the push and the signature left them on an unsigned image for a while, 37 hours here on 2 November 2026 and 89 minutes in heyvaldemar/kubectl-docker on 5 November. A run that cannot sign now names nothing, and every tag keeps naming what it named. The signing test shows it: with signing failing, `latest` stays on the earlier run's signed image and a tag new in that run never appears. The read-back after the tags is unchanged.
+- **Cosign is installed before anything is pushed.** The build job installs cosign v2.6.1 before the push, and the signing action finds it there. On 5 November 2026 in heyvaldemar/kubectl-docker, GitHub answered `cosign-installer` 504 after the push; now a failed install fails the job before even the untagged image is pushed.
+
 ## [2.3.1] - 2026-11-15
 
 ### Added
@@ -319,7 +326,8 @@ _(no unreleased changes yet)_
   `runAsGroup: 0`, `fsGroup: 0`. See the README "Breaking Changes in v2.0" section
   for the full spec.
 
-[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.3.2...HEAD
+[2.3.2]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/heyvaldemar/aws-kubectl-docker/compare/v2.2.0...v2.2.1

@@ -146,16 +146,17 @@ jobs:
             exit 1
           fi
 
-  # The steps that sign, attest and read back a published image, shown each
-  # failure they exist for. It runs the same action the build job runs after
-  # its push (.github/actions/sign-attest-verify), on throwaway images in a
-  # registry on this runner, signed with keys made here: nothing reaches
-  # Docker Hub, GitHub's attestation store or Sigstore's public log. The cases:
-  # nothing planted; the real attestation step failing, as Rekor made it fail
-  # on 2 November 2026 (this job has no OIDC token, so it fails before it
-  # contacts anything); signing failing; signing skipped without a word; a tag
-  # another run moved to an image signed by a stranger's key; a push that
-  # stopped half way. tests/signing-plants.sh says what each must show.
+  # The steps that sign, attest, name and read back a published image, shown
+  # each failure they exist for. It runs the same action the build job runs
+  # after its push by digest (.github/actions/sign-attest-verify), on throwaway
+  # images in a registry on this runner, signed with keys made here: nothing
+  # reaches Docker Hub, GitHub's attestation store or Sigstore's public log.
+  # The cases: nothing planted; the real attestation step failing, as Rekor
+  # made it fail on 2 November 2026 (this job has no OIDC token, so it fails
+  # before it contacts anything); signing failing, with latest already on an
+  # earlier signed image; signing skipped without a word; another run moving
+  # a tag right after it is created. tests/signing-plants.sh says what each
+  # must show: above all, that no tag ever names an unsigned image.
   signing:
     name: Signing, shown each failure it must survive
     runs-on: ubuntu-latest
@@ -218,7 +219,9 @@ jobs:
         with:
           image: localhost:5000/sign-fails
           digest: ${{ steps.setup.outputs.sign_fails }}
-          tags: localhost:5000/sign-fails:latest
+          tags: |
+            localhost:5000/sign-fails:latest
+            localhost:5000/sign-fails:edge
           plant: sign-fails
           cosign-key: ${{ steps.setup.outputs.key }}
 
@@ -235,7 +238,7 @@ jobs:
           plant: sign-skipped
           cosign-key: ${{ steps.setup.outputs.key }}
 
-      - name: "Plant: another run moved a tag to an image this workflow did not sign"
+      - name: "Plant: another run moves a tag to an image this workflow did not sign"
         id: moved
         continue-on-error: true
         uses: ./.github/actions/sign-attest-verify
@@ -246,39 +249,25 @@ jobs:
             localhost:5000/moved:main
             localhost:5000/moved:kube-1.37
           other-run-wait: "20"
-          plant: none
+          plant: moved
+          moved-to: ${{ steps.setup.outputs.moved_other }}
           cosign-key: ${{ steps.setup.outputs.key }}
 
-      - name: "Plant: the push stopped half way"
-        id: unfinished
-        continue-on-error: true
-        uses: ./.github/actions/sign-attest-verify
-        with:
-          image: localhost:5000/unfinished
-          digest: ""
-          tags: |
-            localhost:5000/unfinished:2.3.1
-            localhost:5000/unfinished:2.3
-          other-run-wait: "0"
-          plant: none
-          cosign-key: ${{ steps.setup.outputs.key }}
-
-      - name: Each failure was noticed, and every image this run built is signed
+      - name: Each failure was noticed, and no tag ever named an unsigned image
         env:
           KEY: ${{ steps.setup.outputs.key }}
           UNTOUCHED: ${{ steps.setup.outputs.untouched }}
           ATTEST_FAILS: ${{ steps.setup.outputs.attest_fails }}
           SIGN_FAILS: ${{ steps.setup.outputs.sign_fails }}
+          SIGN_FAILS_OLD: ${{ steps.setup.outputs.sign_fails_old }}
           SIGN_SKIPPED: ${{ steps.setup.outputs.sign_skipped }}
           MOVED: ${{ steps.setup.outputs.moved }}
           MOVED_OTHER: ${{ steps.setup.outputs.moved_other }}
-          UNFINISHED: ${{ steps.setup.outputs.unfinished }}
           UNTOUCHED_OUTCOME: ${{ steps.untouched.outcome }}
           ATTEST_FAILS_OUTCOME: ${{ steps.attest_fails.outcome }}
           SIGN_FAILS_OUTCOME: ${{ steps.sign_fails.outcome }}
           SIGN_SKIPPED_OUTCOME: ${{ steps.sign_skipped.outcome }}
           MOVED_OUTCOME: ${{ steps.moved.outcome }}
-          UNFINISHED_OUTCOME: ${{ steps.unfinished.outcome }}
         run: ./tests/signing-plants.sh check
 
   build:
@@ -393,7 +382,24 @@ jobs:
             org.opencontainers.image.licenses=MIT
             io.heyvaldemar.kubectl.version=${{ steps.kube.outputs.version }}
 
-      - name: Build and push
+      # COSIGN IS INSTALLED BEFORE ANYTHING IS PUSHED. On 5 November 2026, in
+      # heyvaldemar/kubectl-docker, GitHub answered cosign-installer 504 after
+      # the push: signing could not run, and 1.36 and 1.36.6 named an unsigned
+      # image for 89 minutes. A failed install now fails the job while nothing
+      # is public yet; the signing action below finds this cosign and does not
+      # download it again.
+      - name: Install cosign before anything is pushed
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: "v2.6.1"
+
+      # PUSHED BY DIGEST, NAMED ONLY ONCE IT IS SIGNED. The push carries no
+      # tag: the image exists on Docker Hub under its digest alone, and the
+      # tags from the metadata step are created by the signing action below,
+      # after the signature is on the registry and verifies. Until then, and
+      # for good if signing fails, every tag keeps naming what it named.
+      - name: Build and push by digest
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         timeout-minutes: 20
@@ -401,9 +407,8 @@ jobs:
           context: .
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
           pull: true
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             KUBE_VERSION=${{ steps.kube.outputs.version }}
@@ -414,20 +419,16 @@ jobs:
           sbom: true
           provenance: mode=max
 
-      # SIGN FIRST, THEN ATTEST, THEN READ BACK WHAT DOCKER HUB SERVES. The
-      # cosign steps used to follow the attestation and ran only if it
-      # succeeded; on 2 November 2026 Rekor answered it 502, signing was
-      # skipped, and latest, edge and kube-1.37 named an unsigned image for 37
-      # hours. Now the pushed digest is signed whatever the attestation does,
-      # an attestation that fails still fails the job, and then every tag
-      # pushed here is read back from Docker Hub: the digest it names must
-      # carry a cosign signature that verifies as this workflow, or the job
-      # fails (and a digest this job built is signed again). It runs even when
-      # the push failed half way, which is how 2.2.0 went out unsigned: the
-      # build reports no digest then, so the tags it already moved are
-      # reported, not signed. The signing job above runs the same action with
-      # each failure planted.
-      - name: Sign, attest, and read back every pushed tag from Docker Hub
+      # SIGN, ATTEST, NAME, READ BACK. The cosign steps used to follow the
+      # attestation and ran only if it succeeded; on 2 November 2026 Rekor
+      # answered it 502, signing was skipped, and latest, edge and kube-1.37
+      # named an unsigned image for 37 hours. Now the digest pushed above is
+      # signed whatever the attestation does (a failed attestation still fails
+      # the job), its signature must verify as this workflow before any tag is
+      # created, and then every tag is read back from Docker Hub. A run that
+      # cannot sign names nothing. The signing job above runs the same action
+      # with each failure planted.
+      - name: Sign, attest, name, and read back every tag from Docker Hub
         if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.meta.outcome == 'success' }}
         uses: ./.github/actions/sign-attest-verify
         with:
