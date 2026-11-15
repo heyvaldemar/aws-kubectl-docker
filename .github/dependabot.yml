@@ -10,7 +10,11 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # The workflows, and the action that signs what publish.yml pushes: its
+    # cosign-installer and attest-build-provenance pins live there.
+    directories:
+      - "/"
+      - "/.github/actions/sign-attest-verify"
     schedule:
       interval: "weekly"
     groups:
